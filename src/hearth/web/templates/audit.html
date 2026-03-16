@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.audit") }}</p>
+    <h1>{{ t("page.audit") }}</h1>
+    <p class="page-subtitle">{{ page_total }} {{ t("audit.total_records") }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ t("audit.filters") }}</div>
+</section>
+
+<section class="panel toolbar-panel compact-toolbar">
+  <form method="get" action="{{ clear_audit_href }}" class="toolbar toolbar--between">
+    <div class="toolbar-group">
+      <label class="toolbar-field toolbar-field--search">
+        <span>{{ t("audit.search") }}</span>
+        <span class="search-icon" aria-hidden="true"></span>
+        <input type="search" name="search" value="{{ filters.search }}" placeholder="auth / watchdog / node">
+      </label>
+      <label class="toolbar-field toolbar-field--small">
+        <span>{{ t("field.level") }}</span>
+        <select name="level">
+          <option value="">{{ t("value.all") }}</option>
+          {% for item in levels %}
+          <option value="{{ item }}"{% if filters.level == item %} selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="toolbar-field toolbar-field--small">
+        <span>{{ t("field.source") }}</span>
+        <select name="source">
+          <option value="">{{ t("value.all") }}</option>
+          {% for item in sources %}
+          <option value="{{ item }}"{% if filters.source == item %} selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="toolbar-field toolbar-field--small">
+        <span>{{ t("field.limit") }}</span>
+        <input type="number" min="1" max="500" name="limit" value="{{ filters.limit }}">
+      </label>
+    </div>
+    <div class="toolbar-group">
+      <button type="submit">{{ t("audit.filters") }}</button>
+      <a class="button-link" href="{{ clear_audit_href }}">{{ t("action.reset") }}</a>
+    </div>
+  </form>
+</section>
+
+<section class="panel table-panel">
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("logs.event_type") }}</th>
+        <th>{{ t("field.source") }}</th>
+        <th>{{ t("field.level") }}</th>
+        <th>{{ t("field.payload") }}</th>
+        <th>{{ t("field.time") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in events %}
+      <tr>
+        <td>
+          <strong>{{ entry.event_type }}</strong>
+          <div class="muted">{{ entry.message }}</div>
+        </td>
+        <td>{{ entry.source }}</td>
+        <td><span class="status-chip status-chip--{{ entry.tone }}">{{ entry.severity }}</span></td>
+        <td><code>{{ entry.payload_summary }}</code></td>
+        <td>{{ tr(entry.created_at) }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5">{{ t("audit.no_records") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

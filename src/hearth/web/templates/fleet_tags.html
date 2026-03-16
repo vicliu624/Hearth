@@ -1,0 +1,59 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.fleet") }}</p>
+    <h1>{{ t("page.tags") }}</h1>
+    <p class="page-subtitle">{{ page_total }} {{ t("fleet.tags_total") }}</p>
+  </div>
+  <div class="inline-form">
+    <a class="button-link" href="{{ fleet_href }}">{{ t("page.fleet") }}</a>
+    <a class="button-link" href="{{ nodes_href }}">{{ t("page.fleet_nodes") }}</a>
+    <a class="button-link" href="{{ health_href }}">{{ t("page.fleet_health") }}</a>
+    <a class="button-link" href="{{ events_href }}">{{ t("page.fleet_events") }}</a>
+  </div>
+</section>
+
+<section class="metric-grid metric-grid--2">
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("page.tags") }}</p>
+    <h2>{{ page_total }}</h2>
+    <p class="metric-card__subtext">{{ t("fleet.tags_total") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("fleet.total_nodes") }}</p>
+    <h2>{{ tagged_nodes_total }}</h2>
+    <p class="metric-card__subtext">{{ t("fleet.total_nodes") }}</p>
+  </article>
+</section>
+
+<section class="panel table-panel">
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.tags") }}</th>
+        <th>{{ t("topology.members") }}</th>
+        <th>{{ t("field.node") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in tags %}
+      <tr>
+        <td><strong>{{ item.name }}</strong></td>
+        <td>{{ item.count }}</td>
+        <td>
+          {% for node in item.node_links %}
+          <a class="inline-link" href="{{ node.href }}">{{ node.name }}</a>{% if not loop.last %}, {% endif %}
+          {% else %}
+          -
+          {% endfor %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="empty-state">{{ t("fleet.no_tags") }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

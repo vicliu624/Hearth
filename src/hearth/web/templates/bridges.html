@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.bridges") }}</p>
+    <h1>{{ t("page.bridges") }}</h1>
+    <p class="page-subtitle">{{ page_total }} {{ t("bridges.total") }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ tv(summary.runtime_status) }}</div>
+</section>
+
+<section class="metric-grid metric-grid--4">
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("bridges.total") }}</p>
+    <h2>{{ page_total }}</h2>
+    <p class="metric-card__subtext">{{ t("bridges.catalog") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("bridges.configured_total") }}</p>
+    <h2>{{ configured_count }}</h2>
+    <p class="metric-card__subtext">{{ t("field.configured") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("bridges.enabled_total") }}</p>
+    <h2>{{ enabled_count }}</h2>
+    <p class="metric-card__subtext">{{ t("field.status") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("bridges.running_total") }}</p>
+    <h2>{{ running_count }}</h2>
+    <p class="metric-card__subtext">{{ tv(summary.runtime_status) }}</p>
+  </article>
+</section>
+
+<section class="panel">
+  <div class="panel-header">
+    <div>
+      <h2>{{ t("bridges.catalog") }}</h2>
+      <p>{{ t("bridges.catalog_help") }}</p>
+    </div>
+  </div>
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.name") }}</th>
+        <th>{{ t("field.transport") }}</th>
+        <th>{{ t("field.status") }}</th>
+        <th>{{ t("field.health") }}</th>
+        <th>{{ t("field.configured") }}</th>
+        <th>{{ t("field.endpoint") }}</th>
+        <th>{{ t("field.mode") }}</th>
+        <th>{{ t("field.source") }}</th>
+        <th>{{ t("field.summary") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for bridge in bridges %}
+      <tr>
+        <td>
+          <a class="inline-link" href="{{ bridge.detail_href }}"><strong>{{ bridge.label }}</strong></a><br>
+          <span class="muted">{{ bridge.plugin_name }}</span>
+        </td>
+        <td>{{ bridge.transport }}</td>
+        <td><span class="status-chip status-chip--{{ bridge.tone }}">{{ tv(bridge.status) }}</span></td>
+        <td>{{ tv(bridge.health) }}</td>
+        <td>{{ tv('enabled' if bridge.configured else 'disabled') }}</td>
+        <td>{{ bridge.endpoint }}</td>
+        <td>{{ bridge.mode }}</td>
+        <td>{{ bridge.source }}</td>
+        <td>{{ bridge.summary }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="9" class="empty-state">{{ t("empty.services") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

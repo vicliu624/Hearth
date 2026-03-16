@@ -1,0 +1,113 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.routes") }}</p>
+    <h1>{{ route.destination_hash }}</h1>
+    <p class="page-subtitle">{{ route.via_interface or '-' }} · {{ route.next_hop or '-' }}</p>
+  </div>
+  <div class="hero-meta-pill"><a class="inline-link" href="{{ routes_href }}">{{ t("nav.routes") }}</a></div>
+</section>
+
+<section class="metric-grid metric-grid--4">
+  <article class="metric-card metric-card--success">
+    <p class="metric-card__eyebrow">{{ t("field.interface") }}</p>
+    <h2>{{ route.via_interface or '-' }}</h2>
+    <p class="metric-card__subtext">{{ t("field.next_hop") }} · {{ route.next_hop or '-' }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.hops") }}</p>
+    <h2>{{ route.hop_count or '-' }}</h2>
+    <p class="metric-card__subtext">{{ t("field.age") }} · {{ tr(route.last_updated_at) }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.expires") }}</p>
+    <h2>{{ tr(route.expires_at) }}</h2>
+    <p class="metric-card__subtext">{{ route.expires_at or '-' }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("routes.related_announces") }}</p>
+    <h2>{{ related_announces | length }}</h2>
+    <p class="metric-card__subtext">{{ t("field.announces") }}</p>
+  </article>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("routes.current_state") }}</h2>
+      </div>
+    </div>
+    <dl class="system-grid">
+      <dt>{{ t("field.destination") }}</dt>
+      <dd>{{ route.destination_hash }}</dd>
+      <dt>{{ t("field.next_hop") }}</dt>
+      <dd>{{ route.next_hop or '-' }}</dd>
+      <dt>{{ t("field.interface") }}</dt>
+      <dd>{{ route.via_interface or '-' }}</dd>
+      <dt>{{ t("field.hops") }}</dt>
+      <dd>{{ route.hop_count or '-' }}</dd>
+      <dt>{{ t("field.age") }}</dt>
+      <dd>{{ tr(route.last_updated_at) }}</dd>
+      <dt>{{ t("field.expires") }}</dt>
+      <dd>{{ route.expires_at or '-' }}</dd>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("routes.related_peer") }}</h2>
+      </div>
+    </div>
+    {% if related_peer %}
+    <dl class="system-grid">
+      <dt>{{ t("field.peer") }}</dt>
+      <dd>{% if peer_detail_href %}<a class="inline-link" href="{{ peer_detail_href }}">{{ related_peer.display_name or related_peer.peer_hash }}</a>{% else %}{{ related_peer.display_name or related_peer.peer_hash }}{% endif %}</dd>
+      <dt>Hash</dt>
+      <dd>{{ related_peer.peer_hash }}</dd>
+      <dt>{{ t("field.interface") }}</dt>
+      <dd>{{ related_peer.interface_name or '-' }}</dd>
+      <dt>{{ t("field.last_seen") }}</dt>
+      <dd>{{ tr(related_peer.last_seen_at) }}</dd>
+    </dl>
+    {% else %}
+    <div class="empty-state">{{ t("empty.peers") }}</div>
+    {% endif %}
+  </section>
+</section>
+
+<section class="panel table-panel">
+  <div class="panel-header">
+    <div>
+      <h2>{{ t("routes.related_announces") }}</h2>
+    </div>
+  </div>
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.source") }}</th>
+        <th>{{ t("field.interface") }}</th>
+        <th>{{ t("field.received") }}</th>
+        <th>{{ t("field.summary") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for announce in related_announces %}
+      <tr>
+        <td>{% if announce.detail_href %}<a class="inline-link" href="{{ announce.detail_href }}">{{ announce.source_hash }}</a>{% else %}{{ announce.source_hash }}{% endif %}</td>
+        <td>{{ announce.via_interface or '-' }}</td>
+        <td>{{ tr(announce.received_at) }}</td>
+        <td>{{ announce.raw_summary or '-' }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="4">{{ t("empty.announces") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

@@ -1,0 +1,41 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.routes") }}</p>
+    <h1>{{ t("routes.title") }}</h1>
+    <p class="page-subtitle">{{ page_total }} {{ t("field.routes") }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ t("field.uptime") }} · {{ header_state.uptime_compact }}</div>
+</section>
+
+<section class="panel table-panel">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.destination") }}</th>
+        <th>{{ t("field.next_hop") }}</th>
+        <th>{{ t("field.interface") }}</th>
+        <th>{{ t("field.hops") }}</th>
+        <th>{{ t("field.age") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for route in routes %}
+      <tr>
+        <td><a class="inline-link" href="{{ route.detail_href }}">{{ route.destination_hash }}</a></td>
+        <td>{{ route.next_hop or '-' }}</td>
+        <td>{{ route.via_interface or '-' }}</td>
+        <td>{{ route.hop_count or '-' }}</td>
+        <td>{{ tr(route.last_updated_at) }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5">{{ t("empty.routes") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

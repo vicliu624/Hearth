@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.services") }}</p>
+    <h1>{{ service.label }}</h1>
+    <p class="page-subtitle">{{ service.category }} - {{ service.summary }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ tv(service.status) }}</div>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("services.detail") }}</h2></div></div>
+    <dl class="system-grid">
+      <dt>{{ t("field.name") }}</dt><dd>{{ service.name }}</dd>
+      <dt>{{ t("services.category") }}</dt><dd>{{ service.category }}</dd>
+      <dt>{{ t("field.status") }}</dt><dd>{{ tv(service.status) }}</dd>
+      <dt>{{ t("field.health") }}</dt><dd>{{ tv(service.health) }}</dd>
+      <dt>{{ t("field.summary") }}</dt><dd>{{ service.summary }}</dd>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("services.controls") }}</h2></div></div>
+    <form method="post" action="{{ request.url.path }}" class="inline-form">
+      {% for action in service.actions %}
+      <button type="submit" name="action" value="{{ action }}">{{ action }}</button>
+      {% endfor %}
+      <a class="button-link" href="{{ services_href }}">{{ t("services.back") }}</a>
+    </form>
+    <div class="panel-header"><div><h2>{{ t("services.dependencies") }}</h2></div></div>
+    <ul class="detail-list">
+      {% for item in service.dependencies %}
+      <li>{{ item }}</li>
+      {% else %}
+      <li>-</li>
+      {% endfor %}
+    </ul>
+  </section>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("services.health_checks") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.name") }}</th>
+          <th>{{ t("field.status") }}</th>
+          <th>{{ t("field.summary") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for check in service.health_checks %}
+        <tr>
+          <td>{{ check.name }}</td>
+          <td>{{ tv(check.status) }}</td>
+          <td>{{ check.detail }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="panel-header"><div><h2>{{ t("services.logs") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.time") }}</th>
+          <th>{{ t("field.type") }}</th>
+          <th>{{ t("field.status") }}</th>
+          <th>{{ t("field.summary") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in service.logs %}
+        <tr>
+          <td>{{ tr(log.created_at) }}</td>
+          <td>{{ log.event_type }}</td>
+          <td>{{ tv(log.severity) }}</td>
+          <td>{{ log.message }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4">-</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("services.resources") }}</h2></div></div>
+    <pre>{{ service.resource_summary }}</pre>
+    <div class="panel-header"><div><h2>{{ t("field.config") }}</h2></div></div>
+    <pre>{{ service.config }}</pre>
+    <div class="panel-header"><div><h2>{{ t("field.metadata") }}</h2></div></div>
+    <pre>{{ service.details }}</pre>
+  </section>
+</section>
+{% endblock %}

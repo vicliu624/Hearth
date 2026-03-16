@@ -1,0 +1,125 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.peers") }}</p>
+    <h1>{{ peer.display_name or peer.peer_hash }}</h1>
+    <p class="page-subtitle">{{ peer.peer_hash }} · {{ peer.source_type or '-' }}</p>
+  </div>
+  <div class="hero-meta-pill"><a class="inline-link" href="{{ peers_href }}">{{ t("nav.peers") }}</a></div>
+</section>
+
+<section class="metric-grid metric-grid--4">
+  <article class="metric-card metric-card--success">
+    <p class="metric-card__eyebrow">{{ t("field.last_seen") }}</p>
+    <h2>{{ tr(peer.last_seen_at) }}</h2>
+    <p class="metric-card__subtext">{{ peer.interface_name or '-' }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.hops") }}</p>
+    <h2>{{ peer.hops or '-' }}</h2>
+    <p class="metric-card__subtext">{{ t("field.interface") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("peers.interfaces_seen") }}</p>
+    <h2>{{ interfaces_seen | length }}</h2>
+    <p class="metric-card__subtext">{{ interfaces_seen | join(', ') if interfaces_seen else '-' }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("peers.route_links") }}</p>
+    <h2>{{ related_routes | length }}</h2>
+    <p class="metric-card__subtext">{{ t("field.routes") }}</p>
+  </article>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("peers.detail_title") }}</h2>
+      </div>
+    </div>
+    <dl class="system-grid">
+      <dt>{{ t("field.peer") }}</dt>
+      <dd>{{ peer.display_name or '-' }}</dd>
+      <dt>Hash</dt>
+      <dd>{{ peer.peer_hash }}</dd>
+      <dt>{{ t("field.first_seen") }}</dt>
+      <dd>{{ tr(peer.first_seen_at) }}</dd>
+      <dt>{{ t("field.last_seen") }}</dt>
+      <dd>{{ tr(peer.last_seen_at) }}</dd>
+      <dt>{{ t("field.interface") }}</dt>
+      <dd>{{ peer.interface_name or '-' }}</dd>
+      <dt>{{ t("field.hops") }}</dt>
+      <dd>{{ peer.hops or '-' }}</dd>
+      <dt>{{ t("field.source") }}</dt>
+      <dd>{{ peer.source_type or '-' }}</dd>
+    </dl>
+  </section>
+
+  <section class="panel table-panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("peers.route_links") }}</h2>
+      </div>
+    </div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.destination") }}</th>
+          <th>{{ t("field.next_hop") }}</th>
+          <th>{{ t("field.interface") }}</th>
+          <th>{{ t("field.hops") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for route in related_routes %}
+        <tr>
+          <td><a class="inline-link" href="{{ route.detail_href }}">{{ route.destination_hash }}</a></td>
+          <td>{{ route.next_hop or '-' }}</td>
+          <td>{{ route.via_interface or '-' }}</td>
+          <td>{{ route.hop_count or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4">{{ t("empty.routes") }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</section>
+
+<section class="panel table-panel">
+  <div class="panel-header">
+    <div>
+      <h2>{{ t("peers.recent_activity") }}</h2>
+    </div>
+  </div>
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.interface") }}</th>
+        <th>{{ t("field.hops") }}</th>
+        <th>{{ t("field.received") }}</th>
+        <th>{{ t("field.summary") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for announce in announce_history %}
+      <tr>
+        <td>{% if announce.detail_href %}<a class="inline-link" href="{{ announce.detail_href }}">{{ announce.via_interface or '-' }}</a>{% else %}{{ announce.via_interface or '-' }}{% endif %}</td>
+        <td>{{ announce.hop_count or '-' }}</td>
+        <td>{{ tr(announce.received_at) }}</td>
+        <td>{{ announce.raw_summary or '-' }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="4">{{ t("empty.announces") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

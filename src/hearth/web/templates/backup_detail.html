@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.backup") }}</p>
+    <h1>{{ t("page.backup_detail") }}</h1>
+    <p class="page-subtitle">{% if detail %}{{ detail.archive_name }}{% else %}-{% endif %}</p>
+  </div>
+  <div class="hero-meta-pill"><a class="inline-link" href="{{ backup_href }}">{{ t("page.backup") }}</a></div>
+</section>
+
+{% if detail %}
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("backup.detail_title") }}</h2></div></div>
+    <dl class="system-grid">
+      <dt>{{ t("field.name") }}</dt><dd>{{ detail.archive_name }}</dd>
+      <dt>{{ t("field.archive_path") }}</dt><dd>{{ detail.archive_path }}</dd>
+      <dt>{{ t("field.size") }}</dt><dd>{{ detail.size_pretty }}</dd>
+      <dt>{{ t("field.time") }}</dt><dd>{{ tr(detail.modified_at) }}</dd>
+      <dt>{{ t("field.node") }}</dt><dd>{{ detail.node_name or '-' }}</dd>
+      <dt>{{ t("field.files") }}</dt><dd>{{ detail.member_count }}</dd>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("backup.manifest") }}</h2></div></div>
+    {% if detail.manifest %}
+    <pre>{{ detail.manifest | tojson(indent=2) }}</pre>
+    {% else %}
+    <p class="empty-state">{{ t("backup.no_manifest") }}</p>
+    {% endif %}
+  </section>
+</section>
+
+{% if dr_helper %}
+<section class="panel">
+  <div class="panel-header"><div><h2>Disaster Recovery Checklist</h2></div></div>
+  <p class="muted">Selected archive: {{ dr_helper.selected_archive or detail.archive_path }}</p>
+  <ol class="detail-list">
+    {% for step in dr_helper.steps %}
+    <li>{{ step }}</li>
+    {% endfor %}
+  </ol>
+</section>
+{% endif %}
+
+<section class="panel table-panel">
+  <div class="panel-header"><div><h2>{{ t("backup.contents") }}</h2></div></div>
+  <table class="data-table compact-table">
+    <thead>
+      <tr><th>{{ t("field.name") }}</th></tr>
+    </thead>
+    <tbody>
+      {% for item in detail.included %}
+      <tr><td>{{ item }}</td></tr>
+      {% else %}
+      <tr><td class="empty-state">-</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% else %}
+<section class="panel">
+  <p class="empty-state">{{ t("backup.select_archive_hint") }}</p>
+</section>
+{% endif %}
+{% endblock %}

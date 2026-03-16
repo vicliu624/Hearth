@@ -1,0 +1,84 @@
+﻿<!doctype html>
+<html lang="{{ locale or 'zh-CN' }}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title or "Hearth" }}</title>
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body>
+    <header class="shell-header">
+      <div class="shell-header__inner">
+        <div class="shell-header__top">
+          <div class="shell-header__identity">
+            <a class="brand" href="{{ primary_nav_links[0].href if primary_nav_links else '/' }}">
+              <img class="brand-logo" src="/static/logo-small.png" alt="Hearth logo">
+              <span class="brand-copy">
+                <span class="brand-text">Hearth Dashboard</span>
+                <span class="brand-subtitle">{{ t("app.tagline") }}</span>
+              </span>
+            </a>
+            <nav class="nav-links nav-primary" aria-label="Primary navigation">
+              {% for item in primary_nav_links %}
+              <a href="{{ item.href }}"{% if item.active %} class="active"{% endif %}>{{ item.label }}</a>
+              {% endfor %}
+            </nav>
+          </div>
+          <div class="header-status" aria-label="Node status">
+            <div class="status-pill">
+              <span class="status-pill__label">{{ t("field.node") }}</span>
+              <strong class="status-pill__value">{{ header_state.node_name if header_state else "hearth.local" }}</strong>
+            </div>
+            <div class="status-pill">
+              <span class="status-pill__label">{{ t("field.uptime") }}</span>
+              <strong class="status-pill__value">{{ header_state.uptime_compact if header_state else "--" }}</strong>
+            </div>
+            <div class="status-pill status-pill--{{ header_state.runtime_status if header_state else 'unknown' }}">
+              <span class="status-pill__label">{{ t("field.runtime") }}</span>
+              <strong class="status-pill__value">{{ tv(header_state.runtime_status) if header_state else "--" }}</strong>
+            </div>
+            <div class="status-pill status-pill--{{ header_state.health_status if header_state else 'unknown' }}">
+              <span class="status-pill__label">{{ t("field.health") }}</span>
+              <strong class="status-pill__value">{{ tv(header_state.health_status) if header_state else "--" }}</strong>
+            </div>
+          </div>
+        </div>
+        <div class="shell-header__bottom">
+          <div class="shell-header__utility">
+            <nav class="nav-links nav-utility" aria-label="Utility navigation">
+              {% for item in utility_nav_links %}
+              <a href="{{ item.href }}"{% if item.active %} class="active"{% endif %}>{{ item.label }}</a>
+              {% endfor %}
+            </nav>
+          </div>
+          <div class="header-actions">
+            {% if auth_enabled %}
+            <div class="header-auth">
+              {% if admin_authenticated %}
+              <form class="inline-form" method="post" action="{{ logout_href }}">
+                <button type="submit">{{ t("action.logout") }}</button>
+              </form>
+              {% else %}
+              <a class="button-link" href="{{ login_href }}">{{ t("action.login") }}</a>
+              {% endif %}
+            </div>
+            {% endif %}
+            <div class="locale-switcher" aria-label="{{ t('locale.label') }}">
+              {% for item in languages %}
+              <a href="{{ item.href }}" title="{{ item.label }}"{% if item.active %} class="active"{% endif %}>{{ item.code }}</a>
+              {% endfor %}
+            </div>
+            <span class="avatar-chip" aria-hidden="true"></span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      {% if notice %}
+      <section class="flash flash-{{ notice.kind }}">{{ notice.message }}</section>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

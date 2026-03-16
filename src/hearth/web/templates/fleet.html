@@ -1,0 +1,73 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.fleet") }}</p>
+    <h1>{{ t("page.fleet") }}</h1>
+    <p class="page-subtitle">{{ overview.total_nodes }} {{ t("fleet.total_nodes") }}</p>
+  </div>
+  <div class="inline-form">
+    <a class="button-link" href="{{ nodes_href }}">{{ t("page.fleet_nodes") }}</a>
+    <a class="button-link" href="{{ groups_href }}">{{ t("page.fleet_groups") }}</a>
+    <a class="button-link" href="{{ templates_href }}">{{ t("page.templates") }}</a>
+    <a class="button-link" href="{{ tags_href }}">{{ t("page.tags") }}</a>
+    <a class="button-link" href="{{ health_href }}">{{ t("page.fleet_health") }}</a>
+    <a class="button-link" href="{{ events_href }}">{{ t("page.fleet_events") }}</a>
+    <a class="button-link" href="{{ api_docs_href }}">{{ t("nav.docs") }}</a>
+  </div>
+</section>
+
+<section class="dashboard-grid dashboard-grid--compact">
+  <article class="metric-card"><span class="metric-label">{{ t("fleet.total_nodes") }}</span><strong>{{ overview.total_nodes }}</strong></article>
+  <article class="metric-card"><span class="metric-label">{{ t("fleet.online") }}</span><strong>{{ overview.online }}</strong></article>
+  <article class="metric-card"><span class="metric-label">{{ t("fleet.offline") }}</span><strong>{{ overview.offline }}</strong></article>
+  <article class="metric-card"><span class="metric-label">{{ t("fleet.degraded") }}</span><strong>{{ overview.degraded }}</strong></article>
+  <article class="metric-card"><span class="metric-label">{{ t("fleet.critical") }}</span><strong>{{ overview.critical }}</strong></article>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("fleet.recent_alerts") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead><tr><th>{{ t("field.time") }}</th><th>{{ t("field.status") }}</th><th>{{ t("field.summary") }}</th></tr></thead>
+      <tbody>
+        {% for alert in overview.recent_alerts %}
+        <tr>
+          <td>{{ tr(alert.created_at) }}</td>
+          <td>{{ tv(alert.severity) }}</td>
+          <td>{{ alert.message }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3">-</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("fleet.version_distribution") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead><tr><th>{{ t("field.version") }}</th><th>{{ t("fleet.total_nodes") }}</th></tr></thead>
+      <tbody>
+        {% for item in overview.version_distribution %}
+        <tr><td>{{ item.version }}</td><td>{{ item.count }}</td></tr>
+        {% else %}
+        <tr><td colspan="2">-</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="panel-header"><div><h2>{{ t("fleet.group_summary") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead><tr><th>{{ t("field.group") }}</th><th>{{ t("fleet.total_nodes") }}</th></tr></thead>
+      <tbody>
+        {% for item in overview.group_summary %}
+        <tr><td>{{ item.group_name }}</td><td>{{ item.count }}</td></tr>
+        {% else %}
+        <tr><td colspan="2">-</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</section>
+{% endblock %}

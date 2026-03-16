@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.services") }}</p>
+    <h1>{{ t("page.services") }}</h1>
+    <p class="page-subtitle">{{ page_total }} {{ t("services.total") }}</p>
+  </div>
+</section>
+
+<section class="panel table-panel">
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.name") }}</th>
+        <th>{{ t("services.category") }}</th>
+        <th>{{ t("field.status") }}</th>
+        <th>{{ t("field.health") }}</th>
+        <th>{{ t("services.resources") }}</th>
+        <th>{{ t("field.summary") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for service in services %}
+      <tr>
+        <td><a class="inline-link" href="{{ service.detail_href }}">{{ service.label }}</a></td>
+        <td>{{ service.category }}</td>
+        <td>{{ tv(service.status) }}</td>
+        <td>{{ tv(service.health) }}</td>
+        <td>{{ service.resource_summary }}</td>
+        <td>{{ service.summary }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

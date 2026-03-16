@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.topology") }}</p>
+    <h1>{{ t("page.network_insights") }}</h1>
+    <p class="page-subtitle">{{ t("topology.score") }} · {{ insights.score }}/100</p>
+  </div>
+  <div class="hero-meta-pill"><a class="inline-link" href="{{ topology_href }}">{{ t("page.topology") }}</a></div>
+</section>
+
+<section class="metric-grid metric-grid--4">
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("topology.score") }}</p>
+    <h2>{{ insights.score }}</h2>
+    <p class="metric-card__subtext">/ 100</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.peers") }}</p>
+    <h2>{{ insights.overview.peer_count }}</h2>
+    <p class="metric-card__subtext">{{ t("field.routes") }} {{ insights.overview.route_count }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.interfaces") }}</p>
+    <h2>{{ insights.overview.active_interfaces }}</h2>
+    <p class="metric-card__subtext">{{ insights.overview.interface_count }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("topology.average_hops") }}</p>
+    <h2>{{ insights.overview.average_hops }}</h2>
+    <p class="metric-card__subtext">{{ t("field.routes") }}</p>
+  </article>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel panel--wide">
+    <div class="panel-header"><div><h2>{{ t("topology.findings") }}</h2></div></div>
+    <ul class="event-list">
+      {% for item in insights.findings %}
+      <li class="event-item">
+        <span class="status-dot status-dot--{{ item.tone }}"></span>
+        <div class="event-item__body">
+          <strong>{{ item.title }}</strong>
+          <span>{{ item.message }}</span>
+        </div>
+      </li>
+      {% else %}
+      <li class="empty-state">{{ t("topology.no_findings") }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("topology.recommendations") }}</h2></div></div>
+    <ul class="detail-list">
+      <li><a class="inline-link" href="{{ path_changes_href }}">{{ t("page.path_changes") }}</a></li>
+      {% for item in insights.recommendations %}
+      <li>{{ item }}</li>
+      {% else %}
+      <li>-</li>
+      {% endfor %}
+    </ul>
+  </section>
+</section>
+{% endblock %}

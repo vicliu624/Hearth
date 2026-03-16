@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.rollout") }}</p>
+    <h1>{{ t("page.rollout") }}</h1>
+    <p class="page-subtitle">{{ page_total }} {{ t("rollout.total") }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ tv(summary.runtime_status) }}</div>
+</section>
+
+<section class="panel">
+  <div class="panel-header"><div><h2>{{ t("rollout.create") }}</h2></div></div>
+  <p class="muted">Remote rollout execution uses the fleet node management endpoint. Nodes without a reachable `dashboard_url` stay in the planned state.</p>
+  <form method="post" action="{{ request.url.path }}">
+    <div class="toolbar compact-toolbar">
+      <label class="toolbar-field toolbar-field--small"><span>{{ t("rollout.action_type") }}</span>
+        <select name="action">
+          <option value="apply_template">apply_template</option>
+        </select>
+      </label>
+      <label class="toolbar-field toolbar-field--small"><span>{{ t("field.template") }}</span>
+        <select name="template_name">
+          <option value="">-</option>
+          {% for template in templates %}<option value="{{ template.name }}">{{ template.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="toolbar-field toolbar-field--small"><span>{{ t("field.group") }}</span>
+        <select name="target_group">
+          <option value="">-</option>
+          {% for group in groups %}<option value="{{ group.name }}">{{ group.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="toolbar-field"><span>{{ t("field.targets") }}</span><input type="text" name="target_nodes" placeholder="node-a,node-b"></label>
+      <button type="submit">{{ t("rollout.create") }}</button>
+    </div>
+  </form>
+</section>
+
+{% if result %}
+<section class="panel">
+  <div class="panel-header"><div><h2>Latest Result</h2></div></div>
+  <pre>{{ result | tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+
+<section class="panel table-panel">
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>{{ t("rollout.action_type") }}</th>
+        <th>{{ t("field.template") }}</th>
+        <th>{{ t("field.group") }}</th>
+        <th>{{ t("field.targets") }}</th>
+        <th>{{ t("field.status") }}</th>
+        <th>{{ t("field.actor") }}</th>
+        <th>{{ t("field.time") }}</th>
+        <th>{{ t("field.summary") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in rollouts %}
+      <tr>
+        <td>#{{ item.id }}</td>
+        <td>{{ item.action }}</td>
+        <td>{{ item.template_name or '-' }}</td>
+        <td>{{ item.target_group or '-' }}</td>
+        <td>{{ ', '.join(item.resolved_nodes) if item.resolved_nodes else '-' }}</td>
+        <td><span class="status-chip status-chip--{{ item.tone }}">{{ tv(item.status) }}</span></td>
+        <td>{{ item.actor }}</td>
+        <td>{{ tr(item.created_at) }}</td>
+        <td>{{ item.summary or '-' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="empty-state">{{ t("rollout.no_runs") }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

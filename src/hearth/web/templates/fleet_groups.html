@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.fleet") }}</p>
+    <h1>{{ t("page.fleet_groups") }}</h1>
+    <p class="page-subtitle">{{ page_total }} {{ t("fleet.groups_total") }}</p>
+  </div>
+  <div class="inline-form">
+    <a class="button-link" href="{{ fleet_href }}">{{ t("page.fleet") }}</a>
+    <a class="button-link" href="{{ nodes_href }}">{{ t("page.fleet_nodes") }}</a>
+    <a class="button-link" href="{{ templates_href }}">{{ t("page.templates") }}</a>
+  </div>
+</section>
+
+<section class="panel toolbar-panel compact-toolbar">
+  <form method="post" action="{{ request.url.path }}" class="toolbar toolbar--between">
+    <div class="toolbar-group">
+      <input type="hidden" name="action" value="create_group">
+      <label class="toolbar-field"><span>{{ t("field.group") }}</span><input type="text" name="name" required></label>
+      <label class="toolbar-field"><span>{{ t("field.description") }}</span><input type="text" name="description"></label>
+      <label class="toolbar-field toolbar-field--small"><span>{{ t("fleet.group_type") }}</span>
+        <select name="group_type"><option value="home">home</option><option value="community">community</option><option value="relay">relay</option><option value="custom">custom</option></select>
+      </label>
+    </div>
+    <div class="toolbar-group"><button type="submit">{{ t("fleet.create_group") }}</button></div>
+  </form>
+</section>
+
+<section class="panel table-panel">
+  <table class="data-table compact-table">
+    <thead><tr><th>{{ t("field.group") }}</th><th>{{ t("fleet.group_type") }}</th><th>{{ t("fleet.total_nodes") }}</th><th>{{ t("field.summary") }}</th></tr></thead>
+    <tbody>
+      {% for group in groups %}
+      <tr>
+        <td><strong>{{ group.name }}</strong></td>
+        <td>{{ group.group_type }}</td>
+        <td>{{ group.node_count }}</td>
+        <td>{{ group.description or '-' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

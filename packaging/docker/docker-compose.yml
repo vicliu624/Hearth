@@ -1,0 +1,14 @@
+services:
+  hearth:
+    build:
+      context: ../..
+      dockerfile: packaging/docker/Dockerfile
+    image: hearth:latest
+    container_name: hearth
+    restart: unless-stopped
+    ports:
+      - "8480:8480"
+    volumes:
+      - ./data:/data
+    environment:
+      HEARTH_CONFIG: /data/hearth.toml

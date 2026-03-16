@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.bridges") }}</p>
+    <h1>{{ bridge.label }}</h1>
+    <p class="page-subtitle">{{ bridge.transport }} - {{ bridge.summary }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ tv(bridge.status) }}</div>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("bridges.detail") }}</h2></div></div>
+    <dl class="system-grid">
+      <dt>{{ t("field.name") }}</dt><dd>{{ bridge.name }}</dd>
+      <dt>{{ t("bridges.plugin") }}</dt><dd>{{ bridge.plugin_name }}</dd>
+      <dt>{{ t("field.transport") }}</dt><dd>{{ bridge.transport }}</dd>
+      <dt>{{ t("field.status") }}</dt><dd>{{ tv(bridge.status) }}</dd>
+      <dt>{{ t("field.health") }}</dt><dd>{{ tv(bridge.health) }}</dd>
+      <dt>{{ t("field.endpoint") }}</dt><dd>{{ bridge.endpoint }}</dd>
+      <dt>{{ t("field.mode") }}</dt><dd>{{ bridge.mode }}</dd>
+      <dt>{{ t("field.source") }}</dt><dd>{{ bridge.source }}</dd>
+      <dt>{{ t("field.summary") }}</dt><dd>{{ bridge.summary }}</dd>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("bridges.controls") }}</h2></div></div>
+    <form method="post" action="{{ request.url.path }}" class="inline-form">
+      {% for action in bridge.actions %}
+      <button type="submit" name="action" value="{{ action }}">{{ t("bridges.action_" ~ action) }}</button>
+      {% endfor %}
+      {% if plugin_href %}
+      <a class="button-link" href="{{ plugin_href }}">{{ t("bridges.open_plugin") }}</a>
+      {% endif %}
+      <a class="button-link" href="{{ plugin_sources_href }}">{{ t("page.plugin_sources") }}</a>
+      <a class="button-link" href="{{ bridges_href }}">{{ t("bridges.back") }}</a>
+    </form>
+    <div class="panel-header"><div><h2>{{ t("bridges.dependencies") }}</h2></div></div>
+    <ul class="detail-list">
+      {% for item in bridge.dependencies %}
+      <li>{{ item }}</li>
+      {% else %}
+      <li>-</li>
+      {% endfor %}
+    </ul>
+    <div class="panel-header"><div><h2>{{ t("bridges.permissions") }}</h2></div></div>
+    <ul class="detail-list">
+      {% for item in bridge.permissions %}
+      <li>{{ item }}</li>
+      {% else %}
+      <li>-</li>
+      {% endfor %}
+    </ul>
+  </section>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("bridges.source_security") }}</h2></div></div>
+    <dl class="system-grid">
+      <dt>{{ t("plugins.trusted") }}</dt><dd>{{ tv('enabled' if bridge.source_details and bridge.source_details.trusted_source else 'disabled') }}</dd>
+      <dt>{{ t("plugins.signature_status") }}</dt><dd>{{ tv(bridge.source_details.signature_status if bridge.source_details else 'not_required') }}</dd>
+      <dt>{{ t("plugins.signature_algorithm") }}</dt><dd>{{ bridge.source_details.signature_algorithm if bridge.source_details and bridge.source_details.signature_algorithm else '-' }}</dd>
+      <dt>{{ t("plugins.public_key") }}</dt><dd><code>{{ bridge.source_details.public_key if bridge.source_details and bridge.source_details.public_key else '-' }}</code></dd>
+      <dt>{{ t("plugins.index_url") }}</dt><dd><code>{{ bridge.source_details.index_url if bridge.source_details else '-' }}</code></dd>
+      <dt>{{ t("plugins.last_sync") }}</dt><dd>{{ tr(bridge.source_details.last_sync_at if bridge.source_details else None) }}</dd>
+      <dt>{{ t("plugins.manifest_sha256") }}</dt><dd><code>{{ bridge.source_details.manifest_sha256 if bridge.source_details and bridge.source_details.manifest_sha256 else '-' }}</code></dd>
+      <dt>{{ t("plugins.sync_error") }}</dt><dd>{{ bridge.source_details.sync_error if bridge.source_details and bridge.source_details.sync_error else '-' }}</dd>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("bridges.health_checks") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.name") }}</th>
+          <th>{{ t("field.status") }}</th>
+          <th>{{ t("field.message") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for check in bridge.health_checks %}
+        <tr>
+          <td>{{ t("bridges.check_" ~ check.name) }}</td>
+          <td><span class="status-chip status-chip--{{ check.tone }}">{{ tv(check.status) }}</span></td>
+          <td>{{ check.detail }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3">-</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("bridges.recent_operations") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.time") }}</th>
+          <th>{{ t("field.actions") }}</th>
+          <th>{{ t("field.status") }}</th>
+          <th>{{ t("field.message") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in bridge.recent_operations %}
+        <tr>
+          <td>{{ tr(entry.created_at) }}</td>
+          <td>{{ t("bridges.action_" ~ entry.action) }}</td>
+          <td><span class="status-chip status-chip--{{ entry.tone }}">{{ tv(entry.status) }}</span></td>
+          <td>
+            <div>{{ entry.message }}</div>
+            {% if entry.detail %}
+            <div class="muted">{{ entry.detail }}</div>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4">{{ t("bridges.no_recent_operations") }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("bridges.delivery_test") }}</h2></div></div>
+    <p class="page-subtitle">{{ t("bridges.delivery_test_hint") }}</p>
+    <form method="post" action="{{ request.url.path }}" class="inline-form">
+      <button type="submit" name="action" value="test_delivery">{{ t("bridges.action_test_delivery") }}</button>
+    </form>
+    <div class="panel-header"><div><h2>{{ t("plugins.diagnostics") }}</h2></div></div>
+    <pre>{{ bridge.diagnostics | tojson(indent=2) }}</pre>
+    <div class="panel-header"><div><h2>{{ t("field.config") }}</h2></div></div>
+    <pre>{{ bridge.config | tojson(indent=2) }}</pre>
+    {% if result %}
+    <div class="panel-header"><div><h2>{{ t("field.result") }}</h2></div></div>
+    <pre>{{ result | tojson(indent=2) }}</pre>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

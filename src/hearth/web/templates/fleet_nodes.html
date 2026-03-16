@@ -1,0 +1,77 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.fleet") }}</p>
+    <h1>{{ t("page.fleet_nodes") }}</h1>
+    <p class="page-subtitle">{{ page_total }} {{ t("fleet.total_nodes") }}</p>
+  </div>
+  <div class="inline-form">
+    <a class="button-link" href="{{ fleet_href }}">{{ t("page.fleet") }}</a>
+    <a class="button-link" href="{{ groups_href }}">{{ t("page.fleet_groups") }}</a>
+    <a class="button-link" href="{{ templates_href }}">{{ t("page.templates") }}</a>
+    <a class="button-link" href="{{ tags_href }}">{{ t("page.tags") }}</a>
+    <a class="button-link" href="{{ health_href }}">{{ t("page.fleet_health") }}</a>
+    <a class="button-link" href="{{ events_href }}">{{ t("page.fleet_events") }}</a>
+  </div>
+</section>
+
+<section class="panel toolbar-panel compact-toolbar">
+  <form method="post" action="{{ request.url.path }}" class="toolbar toolbar--between">
+    <div class="toolbar-group">
+      <input type="hidden" name="action" value="register_node">
+      <label class="toolbar-field"><span>{{ t("field.node") }}</span><input type="text" name="node_name" required></label>
+      <label class="toolbar-field toolbar-field--small"><span>{{ t("field.group") }}</span>
+        <select name="group_name">
+          <option value="">-</option>
+          {% for group in groups %}<option value="{{ group.name }}">{{ group.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="toolbar-field"><span>{{ t("field.tags") }}</span><input type="text" name="tags" placeholder="home,relay"></label>
+      <label class="toolbar-field toolbar-field--small"><span>{{ t("field.version") }}</span><input type="text" name="version" value="0.1.0"></label>
+      <label class="toolbar-field toolbar-field--small"><span>{{ t("field.health") }}</span>
+        <select name="health_status"><option value="healthy">healthy</option><option value="warning">warning</option><option value="critical">critical</option></select>
+      </label>
+      <label class="toolbar-field toolbar-field--small"><span>{{ t("field.status") }}</span>
+        <select name="runtime_status"><option value="running">running</option><option value="stopped">stopped</option></select>
+      </label>
+      <label class="toolbar-field"><span>{{ t("field.region") }}</span><input type="text" name="region"></label>
+    </div>
+    <div class="toolbar-group"><button type="submit">{{ t("fleet.register_node") }}</button></div>
+  </form>
+</section>
+
+<section class="panel table-panel">
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.node") }}</th>
+        <th>{{ t("field.group") }}</th>
+        <th>{{ t("field.tags") }}</th>
+        <th>{{ t("field.version") }}</th>
+        <th>{{ t("field.health") }}</th>
+        <th>{{ t("field.status") }}</th>
+        <th>{{ t("field.uptime") }}</th>
+        <th>{{ t("field.source") }}</th>
+        <th>{{ t("field.summary") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for node in nodes %}
+      <tr>
+        <td><strong>{{ node.node_name }}</strong>{% if node.local %}<div class="muted">local</div>{% endif %}</td>
+        <td>{{ node.group_name or '-' }}</td>
+        <td>{{ node.tags | join(', ') if node.tags else '-' }}</td>
+        <td>{{ node.version }}</td>
+        <td>{{ tv(node.health_status) }}</td>
+        <td>{{ tv(node.runtime_status) }}</td>
+        <td>{{ node.uptime_seconds }}</td>
+        <td>{{ node.source }}</td>
+        <td><a class="inline-link" href="{{ node.detail_href }}">{{ t("action.view_details") }}</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

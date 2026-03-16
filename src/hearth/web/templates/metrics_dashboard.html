@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.metrics") }}</p>
+    <h1>{{ t("page.metrics") }}</h1>
+    <p class="page-subtitle">{{ summary.node_name }} &middot; {{ tv(summary.health_status) }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ t("field.uptime") }} &middot; {{ header_state.uptime_compact }}</div>
+</section>
+
+<section class="metric-grid metric-grid--4">
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">RX Packets</p>
+    <h2>{{ traffic_snapshot.rx_packets }}</h2>
+    <p class="metric-card__subtext">{{ t("metrics.traffic_window") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">TX Packets</p>
+    <h2>{{ traffic_snapshot.tx_packets }}</h2>
+    <p class="metric-card__subtext">{{ t("metrics.traffic_window") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("dashboard.errors") }}</p>
+    <h2>{{ traffic_snapshot.error_count }}</h2>
+    <p class="metric-card__subtext">{{ t("field.interfaces") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.peers") }}</p>
+    <h2>{{ summary.peer_count }}</h2>
+    <p class="metric-card__subtext">{{ t("field.routes") }} {{ summary.route_count }}</p>
+  </article>
+</section>
+
+<section class="dashboard-grid dashboard-grid--hero">
+  <section class="panel panel--wide">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("dashboard.network_activity") }}</h2>
+        <p>{{ t("metrics.traffic_window") }}</p>
+      </div>
+    </div>
+    {% if activity_bars %}
+    <div class="traffic-chart">
+      {% for point in activity_bars %}
+      <div class="traffic-slot" title="{{ point.title }} / RX {{ point.rx_value }} / TX {{ point.tx_value }}">
+        <span class="traffic-bar traffic-bar--rx" style="height: {{ point.rx_height }}%"></span>
+        <span class="traffic-bar traffic-bar--tx" style="height: {{ point.tx_height }}%"></span>
+        <span class="traffic-label">{{ point.label }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">{{ t("empty.interfaces") }}</div>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("metrics.export_targets") }}</h2>
+      </div>
+    </div>
+    <dl class="system-grid">
+      <dt>{{ t("metrics.prometheus_endpoint") }}</dt>
+      <dd><a class="inline-link" href="{{ prometheus_href }}">/metrics</a></dd>
+      <dt>{{ t("metrics.summary_api") }}</dt>
+      <dd><a class="inline-link" href="{{ metrics_summary_href }}">/api/metrics/summary</a></dd>
+      <dt>{{ t("field.runtime") }}</dt>
+      <dd>{{ tv(summary.runtime_status) }}</dd>
+      <dt>{{ t("field.health") }}</dt>
+      <dd>{{ tv(summary.health_status) }}</dd>
+      <dt>{{ t("field.interfaces") }}</dt>
+      <dd>{{ summary.interface_summary.online }} / {{ summary.interface_summary.total }}</dd>
+      <dt>{{ t("field.restarts") }}</dt>
+      <dd>{{ summary.restart_count }}</dd>
+    </dl>
+  </section>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel panel--wide">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("metrics.interface_counters") }}</h2>
+      </div>
+    </div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.name") }}</th>
+          <th>{{ t("field.type") }}</th>
+          <th>{{ t("field.status") }}</th>
+          <th>RX</th>
+          <th>TX</th>
+          <th>{{ t("dashboard.errors") }}</th>
+          <th>{{ t("field.last_seen") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for interface in interfaces %}
+        <tr>
+          <td>{{ interface.name }}</td>
+          <td>{{ interface.type }}</td>
+          <td><span class="status-chip status-chip--{{ interface.tone }}">{{ tv(interface.status) }}</span></td>
+          <td>{{ interface.rx_packets_display }}</td>
+          <td>{{ interface.tx_packets_display }}</td>
+          <td>{{ interface.error_count_display }}</td>
+          <td>{{ tr(interface.last_seen_at) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="empty-state">{{ t("empty.interfaces") }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("dashboard.system_info") }}</h2>
+      </div>
+    </div>
+    <dl class="system-grid">
+      <dt>{{ t("field.hearth_version") }}</dt>
+      <dd>{{ system_info.hearth_version }}</dd>
+      <dt>{{ t("field.reticulum_version") }}</dt>
+      <dd>{{ system_info.reticulum_version }}</dd>
+      <dt>{{ t("field.cpu") }}</dt>
+      <dd>{{ system_info.cpu }}{% if system_info.cpu_load %} &middot; load {{ system_info.cpu_load }}{% endif %}</dd>
+      <dt>{{ t("field.memory") }}</dt>
+      <dd>{{ system_info.memory or '-' }}</dd>
+      <dt>{{ t("field.disk") }}</dt>
+      <dd>{{ system_info.disk_used }} / {{ system_info.disk_total }}</dd>
+    </dl>
+  </section>
+</section>
+{% endblock %}

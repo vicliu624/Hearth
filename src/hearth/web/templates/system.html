@@ -1,0 +1,106 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.system") }}</p>
+    <h1>{{ t("system.title") }}</h1>
+    <p class="page-subtitle">{{ summary.node_name }} · {{ tv(summary.health_status) }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ t("field.uptime") }} · {{ header_state.uptime_compact }}</div>
+</section>
+
+<section class="metric-grid metric-grid--4">
+  <article class="metric-card metric-card--success">
+    <p class="metric-card__eyebrow">{{ t("field.runtime") }}</p>
+    <h2>{{ tv(summary.runtime_status) }}</h2>
+    <p class="metric-card__subtext">{{ tv(summary.health_status) }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.hearth_version") }}</p>
+    <h2>{{ system_info.hearth_version }}</h2>
+    <p class="metric-card__subtext">{{ t("field.reticulum_version") }} · {{ system_info.reticulum_version }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.memory") }}</p>
+    <h2>{{ system_info.memory or '-' }}</h2>
+    <p class="metric-card__subtext">{{ t("field.cpu") }} · {{ system_info.cpu }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.disk") }}</p>
+    <h2>{{ system_info.disk_used }}</h2>
+    <p class="metric-card__subtext">/ {{ system_info.disk_total }}</p>
+  </article>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("system.environment") }}</h2>
+      </div>
+    </div>
+    <dl class="system-grid">
+      <dt>{{ t("field.hearth_version") }}</dt>
+      <dd>{{ system_info.hearth_version }}</dd>
+      <dt>{{ t("field.reticulum_version") }}</dt>
+      <dd>{{ system_info.reticulum_version if system_info.reticulum_version != '-' else t("system.reticulum_unknown") }}</dd>
+      <dt>{{ t("field.python") }}</dt>
+      <dd>{{ system_info.python }}</dd>
+      <dt>{{ t("field.os") }}</dt>
+      <dd>{{ system_info.os }}</dd>
+      <dt>{{ t("field.cpu") }}</dt>
+      <dd>{{ system_info.cpu }}{% if system_info.cpu_load %} · load {{ system_info.cpu_load }}{% endif %}</dd>
+      <dt>{{ t("field.memory") }}</dt>
+      <dd>{{ system_info.memory or t("system.memory_unknown") }}</dd>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("system.storage") }}</h2>
+      </div>
+    </div>
+    <dl class="system-grid">
+      <dt>{{ t("field.backend") }}</dt>
+      <dd>{{ system_info.backend }}</dd>
+      <dt>{{ t("field.interfaces") }}</dt>
+      <dd>{{ system_info.online_interfaces }} / {{ system_info.interface_count }}</dd>
+      <dt>{{ t("field.peers") }}</dt>
+      <dd>{{ system_info.peer_count }}</dd>
+      <dt>{{ t("field.routes") }}</dt>
+      <dd>{{ system_info.route_count }}</dd>
+      <dt>{{ t("field.disk") }}</dt>
+      <dd>{{ system_info.disk_used }} / {{ system_info.disk_total }}</dd>
+      <dt>{{ t("field.free") }}</dt>
+      <dd>{{ system_info.disk_free }}</dd>
+    </dl>
+  </section>
+</section>
+
+<section class="panel">
+  <div class="panel-header panel-header--split">
+    <div>
+      <h2>{{ t("system.quick_actions") }}</h2>
+      <p>{{ t("section.actions") }}</p>
+    </div>
+  </div>
+  <form class="toolbar compact-toolbar" method="post" action="/system">
+    <button type="submit" name="action" value="start">{{ t("action.start") }}</button>
+    <button type="submit" name="action" value="stop">{{ t("action.stop") }}</button>
+    <button type="submit" name="action" value="restart">{{ t("action.restart") }}</button>
+  </form>
+</section>
+
+{% if result %}
+<section class="panel">
+  <div class="panel-header">
+    <div>
+      <h2>{{ t("config.operation_result") }}</h2>
+    </div>
+  </div>
+  <pre>{{ result | tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+{% endblock %}

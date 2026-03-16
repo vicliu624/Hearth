@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.remote_logs") }}</p>
+    <h1>{{ t("page.remote_logs") }}</h1>
+    <p class="page-subtitle">{{ page_total }} {{ t("remote_logs.total_entries") }} · aggregated local, remote, and inventory events</p>
+  </div>
+  <div class="hero-meta-pill">{{ t("field.uptime") }} &middot; {{ header_state.uptime_compact }}</div>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel toolbar-panel">
+    <div class="panel-header"><div><h2>Filters</h2></div></div>
+    <form class="toolbar toolbar--between" method="get" action="{{ request.url.path }}">
+      <div class="toolbar-group">
+        <label class="toolbar-field toolbar-field--small">
+          <span>{{ t("remote_logs.node_filter") }}</span>
+          <select name="node_name">
+            <option value=""></option>
+            {% for item in node_options %}
+            <option value="{{ item }}"{% if filters.node_name == item %} selected{% endif %}>{{ item }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="toolbar-field toolbar-field--small">
+          <span>{{ t("logs.level_filter") }}</span>
+          <select name="level">
+            <option value=""></option>
+            {% for item in levels %}
+            <option value="{{ item }}"{% if filters.level == item %} selected{% endif %}>{{ item }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="toolbar-field toolbar-field--small">
+          <span>{{ t("logs.limit") }}</span>
+          <input type="number" name="limit" min="1" max="500" value="{{ filters.limit }}">
+        </label>
+      </div>
+      <div class="toolbar-group">
+        <button type="submit">{{ t("action.filter") }}</button>
+        <a class="button-link" href="{{ clear_logs_href }}">{{ t("action.clear") }}</a>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>Sync Remote Nodes</h2></div></div>
+    <form method="post" action="{{ sync_remote_logs_href }}" class="toolbar compact-toolbar">
+      <input type="hidden" name="action" value="sync">
+      <label class="toolbar-field toolbar-field--small"><span>{{ t("logs.limit") }}</span><input type="number" name="limit" min="1" max="500" value="{{ filters.limit }}"></label>
+      <button type="submit">Sync Now</button>
+    </form>
+    <p class="muted">Remote sync pulls `/api/logs` from fleet nodes that expose a management `dashboard_url`.</p>
+  </section>
+</section>
+
+{% if result %}
+<section class="panel">
+  <div class="panel-header"><div><h2>Last Sync Result</h2></div></div>
+  <pre>{{ result | tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+
+<section class="panel table-panel">
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.time") }}</th>
+        <th>{{ t("field.status") }}</th>
+        <th>{{ t("field.node") }}</th>
+        <th>{{ t("field.origin") }}</th>
+        <th>{{ t("field.source") }}</th>
+        <th>{{ t("field.summary") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in logs %}
+      <tr>
+        <td>{{ tr(entry.created_at) }}</td>
+        <td><span class="status-chip status-chip--{{ entry.tone }}">{{ tv(entry.severity) }}</span></td>
+        <td>{{ entry.node_name }}</td>
+        <td>{{ entry.origin }}</td>
+        <td>{{ entry.source }}</td>
+        <td><strong>{{ entry.event_type }}</strong><br>{{ entry.message }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty-state">{{ t("empty.logs") }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

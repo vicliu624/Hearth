@@ -1,0 +1,35 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+dist/
+build/
+*.egg-info/
+.data/
+
+# Local runtime and node state
+data/
+reticulum-config/
+rns/
+identity
+*.db
+*.sqlite
+*.sqlite3
+hearth-backup-*.tar.gz
+
+# Logs and temp files
+*.log
+tmp-debug/
+tmp-*/
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

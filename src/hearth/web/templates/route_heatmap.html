@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.topology") }}</p>
+    <h1>{{ t("page.route_heatmap") }}</h1>
+    <p class="page-subtitle">{{ heatmap.total_routes }} {{ t("field.routes") }}</p>
+  </div>
+  <div class="hero-meta-pill"><a class="inline-link" href="{{ topology_href }}">{{ t("page.topology") }}</a></div>
+</section>
+
+<section class="panel">
+  <div class="panel-header"><div><h2>{{ t("topology.heatmap_table") }}</h2></div></div>
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.interface") }}</th>
+        <th>{{ t("field.status") }}</th>
+        <th>{{ t("field.health") }}</th>
+        <th>{{ t("field.routes") }}</th>
+        <th>{{ t("topology.average_hops") }}</th>
+        <th>{{ t("topology.intensity") }}</th>
+        <th>RX / TX</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in heatmap.rows %}
+      <tr>
+        <td>{{ row.interface_name }}</td>
+        <td>{{ tv(row.status) }}</td>
+        <td><span class="status-chip status-chip--{{ row.tone }}">{{ tv(row.health_status) }}</span></td>
+        <td>{{ row.route_count }} ({{ row.route_share }}%)</td>
+        <td>{{ row.avg_hops }} / {{ row.max_hops }}</td>
+        <td>{{ row.intensity }}</td>
+        <td>{{ row.rx_packets }} / {{ row.tx_packets }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty-state">-</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

@@ -1,0 +1,81 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.fleet") }}</p>
+    <h1>{{ t("page.fleet_events") }}</h1>
+    <p class="page-subtitle">{{ page_total }} {{ t("fleet.events_total") }}</p>
+  </div>
+  <div class="inline-form">
+    <a class="button-link" href="{{ fleet_href }}">{{ t("page.fleet") }}</a>
+    <a class="button-link" href="{{ nodes_href }}">{{ t("page.fleet_nodes") }}</a>
+    <a class="button-link" href="{{ tags_href }}">{{ t("page.tags") }}</a>
+    <a class="button-link" href="{{ health_href }}">{{ t("page.fleet_health") }}</a>
+  </div>
+</section>
+
+<section class="panel toolbar-panel">
+  <form class="toolbar toolbar--between" method="get" action="{{ request.url.path }}">
+    <div class="toolbar-group">
+      <label class="toolbar-field toolbar-field--small">
+        <span>{{ t("field.node") }}</span>
+        <select name="node_name">
+          <option value=""></option>
+          {% for item in node_options %}
+          <option value="{{ item }}"{% if filters.node_name == item %} selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="toolbar-field toolbar-field--small">
+        <span>{{ t("field.status") }}</span>
+        <select name="severity">
+          <option value=""></option>
+          {% for item in levels %}
+          <option value="{{ item }}"{% if filters.severity == item %} selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="toolbar-field toolbar-field--small">
+        <span>{{ t("logs.limit") }}</span>
+        <input type="number" name="limit" min="1" max="500" value="{{ filters.limit }}">
+      </label>
+    </div>
+    <div class="toolbar-group">
+      <button type="submit">{{ t("action.filter") }}</button>
+      <a class="button-link" href="{{ clear_events_href }}">{{ t("action.clear") }}</a>
+    </div>
+  </form>
+</section>
+
+<section class="panel table-panel">
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.time") }}</th>
+        <th>{{ t("field.status") }}</th>
+        <th>{{ t("field.node") }}</th>
+        <th>{{ t("field.group") }}</th>
+        <th>{{ t("field.origin") }}</th>
+        <th>{{ t("field.actor") }}</th>
+        <th>{{ t("field.summary") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in events %}
+      <tr>
+        <td>{{ tr(entry.created_at) }}</td>
+        <td><span class="status-chip status-chip--{{ entry.tone }}">{{ tv(entry.severity) }}</span></td>
+        <td>{{ entry.nodes | join(', ') if entry.nodes else '-' }}</td>
+        <td>{{ entry.group_name or '-' }}</td>
+        <td>{{ entry.origin or entry.source }}</td>
+        <td>{{ entry.actor or '-' }}</td>
+        <td><strong>{{ entry.event_type }}</strong><br>{{ entry.message }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty-state">{{ t("empty.logs") }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

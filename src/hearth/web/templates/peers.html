@@ -1,0 +1,101 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.peers") }}</p>
+    <h1>{{ t("peers.nearby_title") }}</h1>
+    <p class="page-subtitle">{{ all_peer_count }} {{ t("peers.nearby_subtitle") }} · {{ t("peers.title") }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ t("field.uptime") }} · {{ header_state.uptime_compact }}</div>
+</section>
+
+<section class="metric-grid metric-grid--3">
+  <article class="metric-card metric-card--success">
+    <div class="metric-card__icon status-dot status-dot--success"></div>
+    <div>
+      <p class="metric-card__label">{{ t("peers.nearby_title") }}</p>
+      <h2>{{ all_peer_count }}</h2>
+      <p class="metric-card__subtext">{{ t("field.peers") }}</p>
+    </div>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("dashboard.connected_interfaces") }}</p>
+    <h2>{{ shell_summary.interface_summary.online }}</h2>
+    <p class="metric-card__subtext">{{ shell_summary.interface_summary.total }} {{ t("field.interfaces") }}</p>
+  </article>
+  <a class="metric-card metric-card--link" href="{{ topology_href }}">
+    <p class="metric-card__eyebrow">{{ t("dashboard.topology") }}</p>
+    <h2>{{ shell_summary.route_count }}</h2>
+    <p class="metric-card__subtext">{{ t("field.routes") }}</p>
+  </a>
+</section>
+
+<section class="panel toolbar-panel">
+  <form class="toolbar toolbar--between" method="get" action="/peers">
+    <div class="toolbar-group">
+      <label class="toolbar-field">
+        <span>{{ t("common.all") }}</span>
+        <select name="interface">
+          <option value="">{{ t("common.all") }}</option>
+          {% for item in peer_interfaces %}
+          <option value="{{ item }}"{% if filters.interface == item %} selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="toolbar-field toolbar-field--search">
+        <span class="search-icon" aria-hidden="true"></span>
+        <input type="text" name="search" value="{{ filters.search }}" placeholder="{{ t('peers.search_placeholder') }}">
+      </label>
+    </div>
+    <div class="toolbar-group">
+      <label class="toolbar-field toolbar-field--small">
+        <span>{{ t("table.rows_per_page") }}</span>
+        <select name="limit">
+          {% for option in [10, 20, 50, 100] %}
+          <option value="{{ option }}"{% if filters.limit == option %} selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit">{{ t("action.filter") }}</button>
+      <a class="button-link" href="{{ clear_peers_href }}">{{ t("action.clear") }}</a>
+    </div>
+  </form>
+</section>
+
+<section class="panel table-panel">
+  <table class="data-table peer-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.peer") }}</th>
+        <th>{{ t("field.last_seen") }}</th>
+        <th>{{ t("field.interface") }}</th>
+        <th>{{ t("field.hops") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for peer in peers %}
+      <tr>
+        <td>
+          <div class="peer-cell">
+            <span class="status-dot status-dot--{{ peer.tone }}"></span>
+            <a class="inline-link" href="{{ peer.detail_href }}">{{ peer.display_name or peer.peer_hash }}</a>
+          </div>
+        </td>
+        <td>{{ tr(peer.last_seen_at) }}</td>
+        <td>{{ peer.interface_name or '-' }}</td>
+        <td>{{ peer.hops or '-' }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="4">{{ t("empty.peers") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="table-footer">
+    <span>{{ t("table.rows_per_page") }}: {{ filters.limit }}</span>
+    <span>1 of 1</span>
+  </div>
+</section>
+{% endblock %}

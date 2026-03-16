@@ -1,0 +1,182 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.health") }}</p>
+    <h1>{{ t("page.health") }}</h1>
+    <p class="page-subtitle">{{ summary.node_name }} · {{ tv(summary.health_status) }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ t("field.last_check") }} · {{ tr(runtime.last_heartbeat_at or summary.started_at) }}</div>
+</section>
+
+<section class="metric-grid metric-grid--5">
+  <article class="metric-card metric-card--{{ 'success' if summary.health_status == 'healthy' else 'warning' if summary.health_status == 'warning' else 'danger' }}">
+    <p class="metric-card__eyebrow">{{ t("field.health") }}</p>
+    <h2>{{ tv(summary.health_status) }}</h2>
+    <p class="metric-card__subtext">{{ tv(summary.runtime_status) }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("health.status_score") }}</p>
+    <h2>{{ health_score }}</h2>
+    <p class="metric-card__subtext">/ 100</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("health.current_issues") }}</p>
+    <h2>{{ summary.issues | length }}</h2>
+    <p class="metric-card__subtext">{{ t("field.issue") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.interfaces") }}</p>
+    <h2>{{ degraded_count }}</h2>
+    <p class="metric-card__subtext">warning {{ warning_count }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.restarts") }}</p>
+    <h2>{{ restart_count }}</h2>
+    <p class="metric-card__subtext">{{ t("health.restart_history") }}</p>
+  </article>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("health.current_issues") }}</h2>
+      </div>
+    </div>
+    <ul class="event-list">
+      {% for issue in summary.issues %}
+      <li class="event-item">
+        <span class="status-dot status-dot--warning"></span>
+        <div class="event-item__body">
+          <strong>{{ issue }}</strong>
+        </div>
+      </li>
+      {% else %}
+      <li class="empty-state">{{ t("health.no_issues") }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("health.runtime_overview") }}</h2>
+      </div>
+    </div>
+    <dl class="system-grid">
+      <dt>{{ t("field.runtime") }}</dt>
+      <dd>{{ tv(summary.runtime_status) }}</dd>
+      <dt>{{ t("field.backend") }}</dt>
+      <dd>{{ runtime.backend or '-' }}</dd>
+      <dt>{{ t("field.pid") }}</dt>
+      <dd>{{ runtime.pid or '-' }}</dd>
+      <dt>{{ t("field.last_check") }}</dt>
+      <dd>{{ tr(runtime.last_heartbeat_at or summary.started_at) }}</dd>
+      <dt>{{ t("field.restarts") }}</dt>
+      <dd>{{ summary.restart_count }}</dd>
+      <dt>{{ t("field.time") }}</dt>
+      <dd>{{ runtime.started_at or '-' }}</dd>
+    </dl>
+  </section>
+</section>
+
+<section class="panel table-panel">
+  <div class="panel-header">
+    <div>
+      <h2>{{ t("health.interface_overview") }}</h2>
+    </div>
+  </div>
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.name") }}</th>
+        <th>{{ t("field.type") }}</th>
+        <th>{{ t("field.status") }}</th>
+        <th>{{ t("field.health") }}</th>
+        <th>{{ t("field.rx_tx") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for interface in interfaces %}
+      <tr>
+        <td>{{ interface.name }}</td>
+        <td>{{ interface.type }}</td>
+        <td><span class="status-chip status-chip--{{ interface.tone }}">{{ tv(interface.status) }}</span></td>
+        <td>{{ tv(interface.health_status) }}</td>
+        <td>{{ interface.rx_tx }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5">{{ t("empty.interfaces") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel table-panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("health.recent_incidents") }}</h2>
+      </div>
+    </div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("logs.event_type") }}</th>
+          <th>{{ t("field.source") }}</th>
+          <th>{{ t("field.level") }}</th>
+          <th>{{ t("field.time") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in incidents %}
+        <tr>
+          <td>{{ entry.message }}</td>
+          <td>{{ entry.source }}</td>
+          <td><span class="status-chip status-chip--{{ entry.tone }}">{{ entry.severity }}</span></td>
+          <td>{{ tr(entry.created_at) }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4">{{ t("health.no_incidents") }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel table-panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("health.restart_history") }}</h2>
+      </div>
+    </div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.target") }}</th>
+          <th>{{ t("field.reason") }}</th>
+          <th>{{ t("field.time") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in restart_history %}
+        <tr>
+          <td>{{ row.target_type }} · {{ row.target_name }}</td>
+          <td>{{ row.reason }}</td>
+          <td>{{ tr(row.created_at) }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="3">{{ t("health.no_restarts") }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</section>
+{% endblock %}

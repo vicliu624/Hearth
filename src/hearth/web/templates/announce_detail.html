@@ -1,0 +1,119 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.announces") }}</p>
+    <h1>{{ announce.source_hash }}</h1>
+    <p class="page-subtitle">{{ announce.raw_summary or '-' }}</p>
+  </div>
+  <div class="hero-meta-pill"><a class="inline-link" href="{{ announces_href }}">{{ t("nav.announces") }}</a></div>
+</section>
+
+<section class="metric-grid metric-grid--4">
+  <article class="metric-card metric-card--success">
+    <p class="metric-card__eyebrow">{{ t("field.interface") }}</p>
+    <h2>{{ announce.via_interface or '-' }}</h2>
+    <p class="metric-card__subtext">{{ t("field.received") }} · {{ tr(announce.received_at) }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.hops") }}</p>
+    <h2>{{ announce.hop_count or '-' }}</h2>
+    <p class="metric-card__subtext">ID · {{ announce.id }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("announces.related_peer") }}</p>
+    <h2>{{ related_peer.display_name or related_peer.peer_hash if related_peer else '-' }}</h2>
+    <p class="metric-card__subtext">{{ related_peer.interface_name if related_peer else '-' }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("announces.related_route") }}</p>
+    <h2>{{ related_route.destination_hash if related_route else '-' }}</h2>
+    <p class="metric-card__subtext">{{ related_route.via_interface if related_route else '-' }}</p>
+  </article>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("announces.detail_title") }}</h2>
+      </div>
+    </div>
+    <dl class="system-grid">
+      <dt>{{ t("field.source") }}</dt>
+      <dd>{{ announce.source_hash }}</dd>
+      <dt>{{ t("field.interface") }}</dt>
+      <dd>{{ announce.via_interface or '-' }}</dd>
+      <dt>{{ t("field.received") }}</dt>
+      <dd>{{ announce.received_at or '-' }}</dd>
+      <dt>{{ t("field.hops") }}</dt>
+      <dd>{{ announce.hop_count or '-' }}</dd>
+      <dt>{{ t("field.summary") }}</dt>
+      <dd>{{ announce.raw_summary or '-' }}</dd>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("announces.related_peer") }}</h2>
+      </div>
+    </div>
+    {% if related_peer %}
+    <dl class="system-grid">
+      <dt>{{ t("field.peer") }}</dt>
+      <dd>{% if peer_detail_href %}<a class="inline-link" href="{{ peer_detail_href }}">{{ related_peer.display_name or related_peer.peer_hash }}</a>{% else %}{{ related_peer.display_name or related_peer.peer_hash }}{% endif %}</dd>
+      <dt>Hash</dt>
+      <dd>{{ related_peer.peer_hash }}</dd>
+      <dt>{{ t("field.last_seen") }}</dt>
+      <dd>{{ tr(related_peer.last_seen_at) }}</dd>
+    </dl>
+    {% else %}
+    <div class="empty-state">{{ t("empty.peers") }}</div>
+    {% endif %}
+  </section>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("announces.related_route") }}</h2>
+      </div>
+    </div>
+    {% if related_route %}
+    <dl class="system-grid">
+      <dt>{{ t("field.destination") }}</dt>
+      <dd>{% if route_detail_href %}<a class="inline-link" href="{{ route_detail_href }}">{{ related_route.destination_hash }}</a>{% else %}{{ related_route.destination_hash }}{% endif %}</dd>
+      <dt>{{ t("field.next_hop") }}</dt>
+      <dd>{{ related_route.next_hop or '-' }}</dd>
+      <dt>{{ t("field.interface") }}</dt>
+      <dd>{{ related_route.via_interface or '-' }}</dd>
+      <dt>{{ t("field.hops") }}</dt>
+      <dd>{{ related_route.hop_count or '-' }}</dd>
+    </dl>
+    {% else %}
+    <div class="empty-state">{{ t("empty.routes") }}</div>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("announces.metadata") }}</h2>
+      </div>
+    </div>
+    {% if metadata_rows %}
+    <dl class="system-grid">
+      {% for item in metadata_rows %}
+      <dt>{{ item.label }}</dt>
+      <dd>{{ item.value }}</dd>
+      {% endfor %}
+    </dl>
+    {% else %}
+    <div class="empty-state">{{ t("field.metadata") }} · -</div>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

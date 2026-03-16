@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.topology") }}</p>
+    <h1>{{ t("page.critical_nodes") }}</h1>
+    <p class="page-subtitle">{{ nodes | length }} {{ t("topology.candidates") }}</p>
+  </div>
+  <div class="hero-meta-pill"><a class="inline-link" href="{{ topology_href }}">{{ t("page.topology") }}</a></div>
+</section>
+
+<section class="panel">
+  <div class="panel-header"><div><h2>{{ t("topology.critical_table") }}</h2></div></div>
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.name") }}</th>
+        <th>{{ t("topology.classification") }}</th>
+        <th>{{ t("field.routes") }}</th>
+        <th>{{ t("topology.impact_score") }}</th>
+        <th>{{ t("topology.average_hops") }}</th>
+        <th>{{ t("field.interfaces") }}</th>
+        <th>{{ t("topology.destinations") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in nodes %}
+      <tr>
+        <td>{{ item.label }}</td>
+        <td>{{ item.classification }}</td>
+        <td>{{ item.route_count }}</td>
+        <td>{{ item.impact_score }}%</td>
+        <td>{{ item.avg_hops }}</td>
+        <td>{{ item.interfaces | join(', ') }}</td>
+        <td>{{ item.sample_destinations | join(', ') if item.sample_destinations else '-' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty-state">-</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

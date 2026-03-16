@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.config") }}</p>
+    <h1>{{ t("page.config_history") }}</h1>
+    <p class="page-subtitle">{{ page_total }} {{ t("config.revisions") }}</p>
+  </div>
+  <div class="hero-meta-pill"><a class="inline-link" href="{{ config_href }}">{{ t("page.config") }}</a></div>
+</section>
+
+<section class="panel table-panel">
+  <div class="panel-header"><div><h2>{{ t("config.revisions") }}</h2></div></div>
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("config.revision_id") }}</th>
+        <th>{{ t("field.source") }}</th>
+        <th>{{ t("field.actor") }}</th>
+        <th>{{ t("field.time") }}</th>
+        <th>{{ t("field.summary") }}</th>
+        <th>{{ t("action.view_details") }}</th>
+        <th>{{ t("action.restore") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for revision in revisions %}
+      <tr>
+        <td>#{{ revision.id }}</td>
+        <td>{{ revision.source }}</td>
+        <td>{{ revision.actor or '-' }}</td>
+        <td>{{ tr(revision.created_at) }}</td>
+        <td>{{ revision.summary or revision.revision_label }}</td>
+        <td><a class="inline-link" href="{{ revision.review_href }}">{{ t("page.config_review") }}</a></td>
+        <td>
+          <form method="post" action="{{ request.url.path }}" class="inline-form">
+            <input type="hidden" name="action" value="restore">
+            <input type="hidden" name="revision_id" value="{{ revision.id }}">
+            <button type="submit">{{ t("action.restore") }}</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty-state">{{ t("config.no_revisions") }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if result %}
+<section class="panel">
+  <div class="panel-header"><div><h2>{{ t("config.operation_result") }}</h2></div></div>
+  <pre>{{ result | tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+{% endblock %}

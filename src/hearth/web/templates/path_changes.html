@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.path_changes") }}</p>
+    <h1>{{ t("page.path_changes") }}</h1>
+    <p class="page-subtitle">{{ path_changes.total_changes }} {{ t("topology.total_changes") }} · {{ path_changes.volatility_score }}/100</p>
+  </div>
+  <div class="hero-meta-pill"><a class="inline-link" href="{{ topology_href }}">{{ t("page.topology") }}</a></div>
+</section>
+
+<section class="panel toolbar-panel">
+  <form class="toolbar toolbar--between" method="get" action="/path-changes">
+    <div class="toolbar-group">
+      <label class="toolbar-field toolbar-field--small">
+        <span>{{ t("logs.since_minutes") }}</span>
+        <input type="number" name="since_minutes" min="0" max="43200" value="{{ filters.since_minutes }}">
+      </label>
+      <label class="toolbar-field toolbar-field--small">
+        <span>{{ t("topology.recent_changes") }}</span>
+        <input type="number" name="recent_limit" min="1" max="500" value="{{ filters.recent_limit }}">
+      </label>
+    </div>
+    <div class="toolbar-group">
+      <a class="button-link" href="{{ network_insights_href }}">{{ t("page.network_insights") }}</a>
+      <button type="submit">{{ t("action.filter") }}</button>
+      <a class="button-link" href="{{ clear_path_changes_href }}">{{ t("action.clear") }}</a>
+    </div>
+  </form>
+</section>
+
+<section class="metric-grid metric-grid--5">
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("topology.total_changes") }}</p>
+    <h2>{{ path_changes.total_changes }}</h2>
+    <p class="metric-card__subtext">{{ t("field.routes") }} {{ path_changes.current_route_count }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("topology.added_routes") }}</p>
+    <h2>{{ path_changes.added }}</h2>
+    <p class="metric-card__subtext">{{ t("field.destination") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("topology.changed_routes") }}</p>
+    <h2>{{ path_changes.changed }}</h2>
+    <p class="metric-card__subtext">{{ t("field.interfaces") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("topology.removed_routes") }}</p>
+    <h2>{{ path_changes.removed }}</h2>
+    <p class="metric-card__subtext">{{ t("field.routes") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("topology.volatility_score") }}</p>
+    <h2>{{ path_changes.volatility_score }}</h2>
+    <p class="metric-card__subtext">/ 100</p>
+  </article>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel panel--wide">
+    <div class="panel-header"><div><h2>{{ t("topology.most_volatile") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.destination") }}</th>
+          <th>{{ t("topology.volatility_score") }}</th>
+          <th>{{ t("topology.total_changes") }}</th>
+          <th>{{ t("field.interface") }}</th>
+          <th>{{ t("field.hops") }}</th>
+          <th>{{ t("field.time") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in path_changes.destinations %}
+        <tr>
+          <td>{{ item.destination_label }}</td>
+          <td><span class="status-chip status-chip--{{ item.tone }}">{{ item.volatility_score }}</span></td>
+          <td>{{ item.change_count }}</td>
+          <td>{{ item.current_interface or '-' }}</td>
+          <td>{{ item.current_hops if item.current_hops is not none else '-' }}</td>
+          <td>{{ item.last_change_at or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="empty-state">{{ t("topology.no_path_changes") }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("topology.interface_churn") }}</h2></div></div>
+    <ul class="event-list">
+      {% for item in path_changes.interfaces %}
+      <li class="event-item">
+        <div class="event-item__body">
+          <strong>{{ item.interface_name }}</strong>
+          <span>{{ item.change_count }} {{ t("topology.total_changes") }} · {{ item.destination_count }} {{ t("topology.destination_count") }}</span>
+        </div>
+      </li>
+      {% else %}
+      <li class="empty-state">{{ t("topology.no_path_changes") }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+</section>
+
+<section class="panel table-panel">
+  <div class="panel-header"><div><h2>{{ t("topology.recent_changes") }}</h2></div></div>
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.time") }}</th>
+        <th>{{ t("topology.change_type") }}</th>
+        <th>{{ t("field.destination") }}</th>
+        <th>{{ t("field.interface") }}</th>
+        <th>{{ t("field.hops") }}</th>
+        <th>{{ t("field.message") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in path_changes.recent_changes %}
+      <tr>
+        <td>{{ item.created_at }}</td>
+        <td><span class="status-chip status-chip--{{ item.tone }}">{{ item.change_type }}</span></td>
+        <td>{{ item.destination_label }}</td>
+        <td>{{ item.via_interface or '-' }}</td>
+        <td>{{ item.hop_count if item.hop_count is not none else '-' }}</td>
+        <td>{{ item.message }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty-state">{{ t("topology.no_path_changes") }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

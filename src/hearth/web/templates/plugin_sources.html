@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.plugins") }}</p>
+    <h1>{{ t("page.plugin_sources") }}</h1>
+    <p class="page-subtitle">{{ page_total }} {{ t("plugins.sources_total") }} · source trust and Ed25519 signature status</p>
+  </div>
+  <div class="inline-form">
+    <form class="inline-form" method="post" action="{{ refresh_plugin_sources_href }}">
+      <button type="submit">{{ t("plugins.refresh_sources") }}</button>
+    </form>
+    <a class="button-link" href="{{ plugins_href }}">{{ t("plugins.back") }}</a>
+  </div>
+</section>
+
+{% if result %}
+<section class="panel">
+  <div class="panel-header">
+    <div>
+      <h2>{{ t("plugins.refresh_sources") }}</h2>
+    </div>
+  </div>
+  <dl class="system-grid">
+    <dt>{{ t("field.status") }}</dt>
+    <dd>{{ tv("enabled" if result.refreshed else "disabled") }}</dd>
+    <dt>{{ t("field.time") }}</dt>
+    <dd>{{ tr(result.refreshed_at) }}</dd>
+    <dt>{{ t("plugins.index_path") }}</dt>
+    <dd><code>{{ result.index_path }}</code></dd>
+    <dt>{{ t("plugins.sources_total") }}</dt>
+    <dd>{{ result.source_count }}</dd>
+  </dl>
+</section>
+{% endif %}
+
+<section class="panel table-panel">
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.source") }}</th>
+        <th>{{ t("plugins.trusted") }}</th>
+        <th>{{ t("plugins.signature_status") }}</th>
+        <th>{{ t("plugins.sync_state") }}</th>
+        <th>{{ t("plugins.available_count") }}</th>
+        <th>{{ t("plugins.plugin_count") }}</th>
+        <th>{{ t("plugins.enabled_count") }}</th>
+        <th>{{ t("plugins.last_sync") }}</th>
+        <th>{{ t("plugins.index_url") }}</th>
+        <th>{{ t("plugins.description") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for source in sources %}
+      <tr>
+        <td>
+          <div>{{ source.label }}</div>
+          <div class="muted">{{ source.source }}</div>
+        </td>
+        <td>{{ tv('enabled' if source.trusted_source else 'disabled') }}</td>
+        <td>{{ tv(source.signature_status) }}</td>
+        <td>{{ tv(source.sync_state) }}</td>
+        <td>{{ source.available_count }}</td>
+        <td>{{ source.plugin_count }}</td>
+        <td>{{ source.enabled_count }}</td>
+        <td>{{ tr(source.last_sync_at) }}</td>
+        <td><code>{{ source.index_url }}</code></td>
+        <td>
+          <div>{{ source.description }}</div>
+          <div class="muted">{{ ', '.join(source.available_plugins) if source.available_plugins else '-' }}</div>
+          <div class="muted">{{ t("plugins.signature_algorithm") }}: {{ source.signature_algorithm if source.signature_algorithm else '-' }}</div>
+          <div class="muted">{{ t("plugins.public_key") }}: {{ source.public_key if source.public_key else '-' }}</div>
+          <div class="muted">{{ t("plugins.manifest_sha256") }}: {{ source.manifest_sha256 if source.manifest_sha256 else "-" }}</div>
+          {% if source.sync_error %}
+          <div class="muted">{{ t("plugins.sync_error") }}: {{ source.sync_error }}</div>
+          {% endif %}
+          {% if source.plugins %}
+          <div class="muted">{{ ', '.join(source.plugins) }}</div>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="10">{{ t("plugins.empty") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

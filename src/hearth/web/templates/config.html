@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.config") }}</p>
+    <h1>{{ t("config.editor") }}</h1>
+    <p class="page-subtitle">{{ t("config.current_path", path=config_path) }}</p>
+  </div>
+  <div class="hero-meta-pill"><a class="inline-link" href="{{ config_history_href }}">{{ t("page.config_history") }}</a></div>
+</section>
+
+<section class="panel">
+  <div class="panel-header panel-header--split">
+    <div>
+      <h2>{{ t("config.editor") }}</h2>
+      <p>{{ t("config.restart_hint") }}</p>
+    </div>
+    <form class="inline-form" method="post" action="/config">
+      <button type="submit" name="action" value="validate">{{ t("action.validate") }}</button>
+      <button type="submit" name="action" value="save">{{ t("action.save") }}</button>
+      <button type="submit" name="action" value="restart">{{ t("action.restart_node") }}</button>
+    </form>
+  </div>
+  <form method="post" action="/config">
+    <div class="toolbar compact-toolbar">
+      <button type="submit" name="action" value="validate">{{ t("action.validate") }}</button>
+      <button type="submit" name="action" value="save">{{ t("action.save") }}</button>
+      <button type="submit" name="action" value="restart">{{ t("action.restart_node") }}</button>
+    </div>
+    <textarea class="editor" name="raw">{{ raw }}</textarea>
+  </form>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("config.revisions") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead><tr><th>{{ t("config.revision_id") }}</th><th>{{ t("field.source") }}</th><th>{{ t("field.time") }}</th><th>{{ t("field.summary") }}</th></tr></thead>
+      <tbody>
+        {% for revision in revisions %}
+        <tr>
+          <td><a class="inline-link" href="{{ request.url.path }}?revision={{ revision.id }}">#{{ revision.id }}</a></td>
+          <td>{{ revision.source }}</td>
+          <td>{{ tr(revision.created_at) }}</td>
+          <td>{{ revision.summary or revision.revision_label }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4">{{ t("config.no_revisions") }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("config.compare_summary") }}</h2></div></div>
+    {% if selected_revision %}
+    <div class="toolbar compact-toolbar">
+      {% if config_review_href %}
+      <a class="button-link" href="{{ config_review_href }}">{{ t("page.config_review") }}</a>
+      {% endif %}
+    </div>
+    <dl class="system-grid">
+      <dt>{{ t("config.revision_id") }}</dt><dd>#{{ selected_revision.id }}</dd>
+      <dt>{{ t("field.source") }}</dt><dd>{{ selected_revision.source }}</dd>
+      <dt>{{ t("field.time") }}</dt><dd>{{ tr(selected_revision.created_at) }}</dd>
+      <dt>{{ t("field.summary") }}</dt><dd>{{ selected_revision.summary or selected_revision.revision_label }}</dd>
+      <dt>{{ t("config.changed_lines") }}</dt><dd>+{{ compare_summary.added_lines if compare_summary else 0 }} / -{{ compare_summary.removed_lines if compare_summary else 0 }}</dd>
+    </dl>
+    <pre>{{ compare_summary.diff_preview if compare_summary else [] }}</pre>
+    {% else %}
+    <p class="muted">{{ t("config.select_revision_hint") }}</p>
+    {% endif %}
+  </section>
+</section>
+
+{% if result %}
+<section class="panel">
+  <div class="panel-header">
+    <div>
+      <h2>{{ t("config.operation_result") }}</h2>
+    </div>
+  </div>
+  <pre>{{ result | tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+{% endblock %}

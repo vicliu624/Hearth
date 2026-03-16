@@ -1,0 +1,28 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<section class="auth-shell">
+  <section class="panel auth-card">
+    <div class="panel-header">
+      <div>
+        <p class="page-kicker">{{ t("action.login") }}</p>
+        <h1>{{ t("auth.login_title") }}</h1>
+        <p>{{ t("auth.login_hint") }}</p>
+      </div>
+    </div>
+    {% if auth_enabled %}
+    <form class="stack-form" method="post" action="{{ login_post_href }}">
+      <input type="hidden" name="next" value="{{ next_path }}">
+      <label class="toolbar-field stacked-field">
+        <span>{{ t("field.token") }}</span>
+        <input type="password" name="token" autocomplete="current-password" required>
+      </label>
+      <button type="submit">{{ t("action.login") }}</button>
+    </form>
+    {% else %}
+    <p class="empty-state">{{ t("auth.not_required") }}</p>
+    <a class="button-link" href="{{ system_href }}">{{ t("nav.system") }}</a>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

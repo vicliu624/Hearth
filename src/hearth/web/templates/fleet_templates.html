@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.fleet") }}</p>
+    <h1>{{ t("page.templates") }}</h1>
+    <p class="page-subtitle">{{ page_total }} {{ t("fleet.templates_total") }}</p>
+  </div>
+  <div class="inline-form">
+    <a class="button-link" href="{{ fleet_href }}">{{ t("page.fleet") }}</a>
+    <a class="button-link" href="{{ nodes_href }}">{{ t("page.fleet_nodes") }}</a>
+    <a class="button-link" href="{{ groups_href }}">{{ t("page.fleet_groups") }}</a>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-header"><div><h2>{{ t("fleet.create_template") }}</h2></div></div>
+  <form method="post" action="{{ request.url.path }}">
+    <input type="hidden" name="action" value="create_template">
+    <div class="toolbar compact-toolbar">
+      <label class="toolbar-field"><span>{{ t("field.template") }}</span><input type="text" name="name" required></label>
+      <label class="toolbar-field"><span>{{ t("field.description") }}</span><input type="text" name="description"></label>
+      <label class="toolbar-field toolbar-field--small"><span>{{ t("field.group") }}</span>
+        <select name="target_group"><option value="">-</option>{% for group in groups %}<option value="{{ group.name }}">{{ group.name }}</option>{% endfor %}</select>
+      </label>
+      <label class="toolbar-field"><span>{{ t("fleet.target_nodes") }}</span><input type="text" name="target_nodes" placeholder="node-a,node-b"></label>
+    </div>
+    <textarea class="editor" name="template_text">[reticulum]
+auto_start = true</textarea>
+    <div class="toolbar compact-toolbar"><button type="submit">{{ t("fleet.create_template") }}</button></div>
+  </form>
+</section>
+
+<section class="panel table-panel">
+  <table class="data-table compact-table">
+    <thead><tr><th>{{ t("field.template") }}</th><th>{{ t("field.group") }}</th><th>{{ t("fleet.applied_nodes") }}</th><th>{{ t("field.time") }}</th><th>{{ t("field.summary") }}</th></tr></thead>
+    <tbody>
+      {% for template in templates %}
+      <tr>
+        <td><strong>{{ template.name }}</strong></td>
+        <td>{{ template.target_group or '-' }}</td>
+        <td>{{ ', '.join(template.applied_nodes) if template.applied_nodes else '-' }}</td>
+        <td>{{ tr(template.updated_at) }}</td>
+        <td>{{ template.description or '-' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

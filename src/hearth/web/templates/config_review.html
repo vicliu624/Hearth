@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.config") }}</p>
+    <h1>{{ t("page.config_review") }}</h1>
+    <p class="page-subtitle">{% if revision %}#{{ revision.id }} · {{ revision.summary or revision.revision_label }}{% else %}-{% endif %}</p>
+  </div>
+  <div class="hero-meta-pill"><a class="inline-link" href="{{ config_history_href }}">{{ t("page.config_history") }}</a></div>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("config.compare_summary") }}</h2></div></div>
+    {% if revision and compare_summary %}
+    <dl class="system-grid">
+      <dt>{{ t("config.revision_id") }}</dt><dd>#{{ revision.id }}</dd>
+      <dt>{{ t("field.source") }}</dt><dd>{{ revision.source }}</dd>
+      <dt>{{ t("field.actor") }}</dt><dd>{{ revision.actor or '-' }}</dd>
+      <dt>{{ t("field.time") }}</dt><dd>{{ tr(revision.created_at) }}</dd>
+      <dt>{{ t("config.changed_lines") }}</dt><dd>+{{ compare_summary.added_lines }} / -{{ compare_summary.removed_lines }}</dd>
+      <dt>{{ t("config.restart_required") }}</dt><dd>{{ tv('enabled' if compare_summary.restart_required else 'disabled') }}</dd>
+      <dt>{{ t("config.affected_modules") }}</dt><dd>{{ compare_summary.affected_modules | join(', ') if compare_summary.affected_modules else '-' }}</dd>
+    </dl>
+    <form method="post" action="{{ request.url.path }}" class="toolbar compact-toolbar">
+      <button type="submit">{{ t("action.restore") }}</button>
+      <a class="button-link" href="{{ config_href }}">{{ t("page.config") }}</a>
+    </form>
+    {% else %}
+    <p class="empty-state">{{ t("config.no_revisions") }}</p>
+    {% endif %}
+  </section>
+
+  <section class="panel panel--wide">
+    <div class="panel-header"><div><h2>{{ t("page.config_review") }}</h2></div></div>
+    {% if compare_summary and compare_summary.diff_preview %}
+    <pre>{{ compare_summary.diff_preview | join('\n') }}</pre>
+    {% else %}
+    <p class="empty-state">{{ t("config.no_diff") }}</p>
+    {% endif %}
+  </section>
+</section>
+
+{% if result %}
+<section class="panel">
+  <div class="panel-header"><div><h2>{{ t("config.operation_result") }}</h2></div></div>
+  <pre>{{ result | tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+{% endblock %}

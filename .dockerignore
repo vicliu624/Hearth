@@ -1,0 +1,16 @@
+.git
+.github
+.pytest_cache
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+build
+dist
+data
+packaging/docker/data
+*.db
+*.sqlite
+*.sqlite3
+".

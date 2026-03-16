@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.plugins") }}</p>
+    <h1>{{ t("page.plugins") }}</h1>
+    <p class="page-subtitle">{{ page_total }} installed plugins · catalog, trust, and lifecycle management</p>
+  </div>
+  <div class="inline-form">
+    <a class="button-link" href="{{ plugin_sources_href }}">{{ t("page.plugin_sources") }}</a>
+  </div>
+</section>
+
+<section class="panel table-panel">
+  <div class="panel-header"><div><h2>Installed Plugins</h2></div></div>
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.name") }}</th>
+        <th>{{ t("field.type") }}</th>
+        <th>{{ t("field.status") }}</th>
+        <th>{{ t("field.source") }}</th>
+        <th>{{ t("plugins.version") }}</th>
+        <th>Sandbox</th>
+        <th>{{ t("field.summary") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for plugin in plugins %}
+      <tr>
+        <td><a class="inline-link" href="{{ plugin.detail_href }}">{{ plugin.name }}</a></td>
+        <td>{{ plugin.type }}</td>
+        <td><span class="status-chip status-chip--{{ 'success' if plugin.enabled else 'warning' }}">{{ tv('enabled' if plugin.enabled else 'disabled') }}</span></td>
+        <td>{{ plugin.source }}</td>
+        <td>{{ plugin.version }}</td>
+        <td>{{ plugin.sandbox_boundary.runtime_scope if plugin.sandbox_boundary else '-' }}</td>
+        <td>{{ plugin.description or '-' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty-state">{{ t("plugins.empty") }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="panel table-panel">
+  <div class="panel-header">
+    <div>
+      <h2>Catalog</h2>
+      <p>Catalog entries include source trust state, signature verification state, dependencies, and install readiness.</p>
+    </div>
+  </div>
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.name") }}</th>
+        <th>State</th>
+        <th>{{ t("field.source") }}</th>
+        <th>{{ t("plugins.version") }}</th>
+        <th>{{ t("plugins.signature_status") }}</th>
+        <th>{{ t("plugins.dependencies") }}</th>
+        <th>{{ t("field.summary") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for plugin in catalog_plugins %}
+      <tr>
+        <td><a class="inline-link" href="{{ plugin.detail_href }}">{{ plugin.name }}</a></td>
+        <td>{{ plugin.state_label }}</td>
+        <td>{{ plugin.source }}</td>
+        <td>{{ plugin.version }}</td>
+        <td>{{ tv(plugin.signature_status) }}</td>
+        <td>{{ plugin.depends_on | join(', ') if plugin.depends_on else '-' }}</td>
+        <td>{{ plugin.description or '-' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty-state">No catalog plugins available.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="panel table-panel">
+  <div class="panel-header"><div><h2>Recent Plugin Operations</h2></div></div>
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.time") }}</th>
+        <th>{{ t("field.name") }}</th>
+        <th>Operation</th>
+        <th>{{ t("field.summary") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in plugin_history %}
+      <tr>
+        <td>{{ tr(item.created_at) }}</td>
+        <td>{{ item.plugin_name or '-' }}</td>
+        <td>{{ item.operation }}</td>
+        <td>{{ item.payload | tojson }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="empty-state">No plugin activity recorded yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

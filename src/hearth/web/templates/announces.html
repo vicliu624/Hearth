@@ -1,0 +1,41 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.announces") }}</p>
+    <h1>{{ t("announces.title") }}</h1>
+    <p class="page-subtitle">{{ page_total }} {{ t("field.announces") }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ t("field.uptime") }} · {{ header_state.uptime_compact }}</div>
+</section>
+
+<section class="panel table-panel">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.source") }}</th>
+        <th>{{ t("field.interface") }}</th>
+        <th>{{ t("field.hops") }}</th>
+        <th>{{ t("field.received") }}</th>
+        <th>{{ t("field.summary") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for announce in announces %}
+      <tr>
+        <td>{% if announce.detail_href %}<a class="inline-link" href="{{ announce.detail_href }}">{{ announce.source_hash }}</a>{% else %}{{ announce.source_hash }}{% endif %}</td>
+        <td>{{ announce.via_interface or '-' }}</td>
+        <td>{{ announce.hop_count or '-' }}</td>
+        <td>{{ tr(announce.received_at) }}</td>
+        <td>{{ announce.raw_summary or '-' }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5">{{ t("empty.announces") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

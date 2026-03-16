@@ -1,0 +1,67 @@
+[system]
+node_name = "hearth-dev"
+data_dir = "./.data"
+log_level = "INFO"
+timezone = "Asia/Shanghai"
+
+[reticulum]
+enabled = true
+config_path = "./reticulum-config"
+identity_path = "./.data/identity"
+auto_start = true
+backend = "managed_rnsd"
+managed_command = "rnsd"
+render_managed_config = true
+transport_enabled = true
+shared_instance = true
+loglevel = 4
+heartbeat_interval_sec = 2
+health_timeout_sec = 10
+shutdown_timeout_sec = 5
+
+[web]
+enabled = true
+host = "127.0.0.1"
+port = 8480
+auth_mode = "local_token"
+
+[security]
+admin_token = "change-me"
+allow_lan = true
+allow_wan = false
+
+[monitor]
+health_check_interval_sec = 15
+metrics_refresh_sec = 10
+watchdog_enabled = true
+auto_restart_runtime = true
+auto_restart_interface = true
+restart_cooldown_sec = 30
+
+[[interfaces]]
+name = "tcp_backbone"
+type = "tcp"
+enabled = true
+role = "uplink"
+host = "backbone.example.org"
+port = 4242
+
+[[interfaces]]
+name = "local_lan"
+type = "local"
+enabled = true
+role = "transport"
+devices = ["eth0", "wlan0"]
+discovery_port = 29716
+data_port = 42671
+
+[[interfaces]]
+name = "rnode_usb"
+type = "rnode"
+enabled = false
+device = "/dev/ttyUSB0"
+baudrate = 115200
+
+[[plugins]]
+name = "example_plugin"
+enabled = false

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.topology") }}</p>
+    <h1>{{ t("page.network_map") }}</h1>
+    <p class="page-subtitle">{{ network_map.interface_total }} {{ t("field.interfaces") }}</p>
+  </div>
+  <div class="hero-meta-pill"><a class="inline-link" href="{{ topology_href }}">{{ t("page.topology") }}</a></div>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel panel--wide">
+    <div class="panel-header"><div><h2>{{ t("topology.interface_segments") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.interface") }}</th>
+          <th>{{ t("field.status") }}</th>
+          <th>{{ t("topology.members") }}</th>
+          <th>{{ t("topology.peer_links") }}</th>
+          <th>{{ t("topology.destinations") }}</th>
+          <th>{{ t("topology.connectivity") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for segment in network_map.segments %}
+        <tr>
+          <td>{{ segment.interface_name }}</td>
+          <td>{{ tv(segment.status) }}</td>
+          <td>{{ segment.member_count }}</td>
+          <td>{{ segment.peer_labels | join(', ') if segment.peer_labels else '-' }}</td>
+          <td>{{ segment.destinations | join(', ') if segment.destinations else '-' }}</td>
+          <td>{{ tv(segment.connectivity) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="empty-state">-</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("topology.islands") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr><th>{{ t("field.name") }}</th><th>{{ t("topology.members") }}</th><th>{{ t("field.routes") }}</th></tr>
+      </thead>
+      <tbody>
+        {% for island in network_map.islands %}
+        <tr><td>{{ island.name }}</td><td>{{ island.member_count }}</td><td>{{ island.route_count }}</td></tr>
+        {% else %}
+        <tr><td colspan="3" class="empty-state">-</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="panel-header"><div><h2>{{ t("topology.bridge_nodes") }}</h2></div></div>
+    <ul class="detail-list">
+      {% for item in network_map.bridges %}
+      <li>{{ item.label }} &middot; {{ item.route_count }} {{ t("field.routes") }}</li>
+      {% else %}
+      <li>-</li>
+      {% endfor %}
+    </ul>
+  </section>
+</section>
+{% endblock %}

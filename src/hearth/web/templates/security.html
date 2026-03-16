@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.security") }}</p>
+    <h1>{{ t("page.security") }}</h1>
+    <p class="page-subtitle">{{ tv(access_status) }} - {{ tv(client_zone) }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ t("security.metrics_endpoint") }} - <a class="inline-link" href="{{ metrics_href }}">/metrics</a></div>
+</section>
+
+<section class="metric-grid metric-grid--4">
+  <article class="metric-card metric-card--{{ 'success' if access_status == 'protected' else 'warning' }}">
+    <div>
+      <p class="metric-card__eyebrow">{{ t("security.access_policy") }}</p>
+      <h2>{{ tv(access_status) }}</h2>
+      <p class="metric-card__subtext">{{ t("field.auth_mode") }} - {{ tv(auth_mode_value) }}</p>
+    </div>
+  </article>
+  <article class="metric-card">
+    <div>
+      <p class="metric-card__eyebrow">{{ t("nav.tokens") }}</p>
+      <h2>{{ token_count }}</h2>
+      <p class="metric-card__subtext">{{ t("field.token") }}</p>
+    </div>
+  </article>
+  <article class="metric-card">
+    <div>
+      <p class="metric-card__eyebrow">{{ t("security.network_policy") }}</p>
+      <h2>{{ tv(client_zone) }}</h2>
+      <p class="metric-card__subtext">LAN {{ tv(allow_lan_state) }} - WAN {{ tv(allow_wan_state) }}</p>
+    </div>
+  </article>
+  <article class="metric-card">
+    <div>
+      <p class="metric-card__eyebrow">{{ t("security.watchdog_policy") }}</p>
+      <h2>{{ tv(watchdog_state) }}</h2>
+      <p class="metric-card__subtext">{{ restart_cooldown_sec }}s</p>
+    </div>
+  </article>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("security.access_policy") }}</h2>
+      </div>
+    </div>
+    <dl class="system-grid">
+      <dt>{{ t("field.auth_mode") }}</dt>
+      <dd>{{ tv(auth_mode_value) }}</dd>
+      <dt>{{ t("field.access") }}</dt>
+      <dd>{{ tv(access_status) }}</dd>
+      <dt>{{ t("field.token") }}</dt>
+      <dd>{{ tv(token_status) }}</dd>
+      <dt>{{ t("security.metrics_endpoint") }}</dt>
+      <dd><a class="inline-link" href="{{ metrics_href }}">/metrics</a></dd>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("security.network_policy") }}</h2>
+      </div>
+    </div>
+    <dl class="system-grid">
+      <dt>{{ t("field.client") }}</dt>
+      <dd>{{ client_host }}</dd>
+      <dt>{{ t("field.client_zone") }}</dt>
+      <dd>{{ tv(client_zone) }}</dd>
+      <dt>{{ t("security.allow_lan") }}</dt>
+      <dd>{{ tv(allow_lan_state) }}</dd>
+      <dt>{{ t("security.allow_wan") }}</dt>
+      <dd>{{ tv(allow_wan_state) }}</dd>
+    </dl>
+  </section>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel table-panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("security.browser_protection") }}</h2>
+      </div>
+    </div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.header") }}</th>
+          <th>{{ t("field.status") }}</th>
+          <th>{{ t("field.value") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in browser_headers %}
+        <tr>
+          <td>{{ item.name }}</td>
+          <td><span class="status-chip status-chip--{{ 'success' if item.active else 'warning' }}">{{ tv(item.status) }}</span></td>
+          <td><code>{{ item.value }}</code></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("security.watchdog_policy") }}</h2>
+      </div>
+    </div>
+    <dl class="system-grid">
+      <dt>{{ t("security.watchdog_enabled") }}</dt>
+      <dd>{{ tv(watchdog_state) }}</dd>
+      <dt>{{ t("security.auto_restart_runtime") }}</dt>
+      <dd>{{ tv(auto_restart_runtime_state) }}</dd>
+      <dt>{{ t("security.auto_restart_interface") }}</dt>
+      <dd>{{ tv(auto_restart_interface_state) }}</dd>
+      <dt>{{ t("security.restart_cooldown") }}</dt>
+      <dd>{{ restart_cooldown_sec }}s</dd>
+    </dl>
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("security.findings") }}</h2>
+      </div>
+    </div>
+    <ul class="event-list">
+      {% for finding in findings %}
+      <li class="event-item">
+        <span class="status-dot status-dot--warning"></span>
+        <div class="event-item__body">
+          <strong>{{ t(finding) }}</strong>
+        </div>
+      </li>
+      {% else %}
+      <li class="empty-state">{{ t("security.no_findings") }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+</section>
+{% endblock %}

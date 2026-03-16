@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.topology") }}</p>
+    <h1>{{ t("page.topology") }}</h1>
+    <p class="page-subtitle">{{ topology.local_node }} · {{ topology.overview.route_count }} {{ t("field.routes") }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ t("topology.generated_at") }} · {{ tr(topology.generated_at) }}</div>
+</section>
+
+<section class="metric-grid metric-grid--4">
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("topology.nodes_total") }}</p>
+    <h2>{{ topology.overview.node_count }}</h2>
+    <p class="metric-card__subtext">{{ t("field.peers") }} {{ topology.overview.peer_count }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("topology.edges_total") }}</p>
+    <h2>{{ topology.overview.edge_count }}</h2>
+    <p class="metric-card__subtext">{{ t("field.routes") }} {{ topology.overview.route_count }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("topology.connected_segments") }}</p>
+    <h2>{{ topology.overview.active_interfaces }}</h2>
+    <p class="metric-card__subtext">{{ t("field.interfaces") }} {{ topology.overview.interface_count }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("topology.average_hops") }}</p>
+    <h2>{{ topology.overview.average_hops }}</h2>
+    <p class="metric-card__subtext">{{ t("field.routes") }}</p>
+  </article>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("topology.quick_views") }}</h2></div></div>
+    <ul class="detail-list">
+      <li><a class="inline-link" href="{{ network_map_href }}">{{ t("page.network_map") }}</a></li>
+      <li><a class="inline-link" href="{{ route_heatmap_href }}">{{ t("page.route_heatmap") }}</a></li>
+      <li><a class="inline-link" href="{{ critical_nodes_href }}">{{ t("page.critical_nodes") }}</a></li>
+      <li><a class="inline-link" href="{{ network_insights_href }}">{{ t("page.network_insights") }}</a></li>
+      <li><a class="inline-link" href="{{ path_changes_href }}">{{ t("page.path_changes") }}</a></li>
+    </ul>
+  </section>
+
+  <section class="panel panel--wide">
+    <div class="panel-header"><div><h2>{{ t("topology.interface_segments") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.interface") }}</th>
+          <th>{{ t("field.status") }}</th>
+          <th>{{ t("field.health") }}</th>
+          <th>{{ t("topology.peer_links") }}</th>
+          <th>{{ t("topology.route_links") }}</th>
+          <th>{{ t("topology.connectivity") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for segment in topology.segments %}
+        <tr>
+          <td>{{ segment.interface_name }}</td>
+          <td>{{ tv(segment.status) }}</td>
+          <td>{{ tv(segment.health_status) }}</td>
+          <td>{{ segment.peer_count }}</td>
+          <td>{{ segment.route_count }}</td>
+          <td>{{ tv(segment.connectivity) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="empty-state">-</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("topology.nodes_table") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr><th>{{ t("field.name") }}</th><th>{{ t("field.type") }}</th><th>{{ t("field.interface") }}</th><th>{{ t("field.hops") }}</th></tr>
+      </thead>
+      <tbody>
+        {% for item in topology.nodes %}
+        <tr>
+          <td>{{ item.label }}</td>
+          <td>{{ item.kind }}</td>
+          <td>{{ item.interface_name or '-' }}</td>
+          <td>{{ item.hops if item.hops is not none else '-' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="empty-state">-</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("topology.hop_distribution") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr><th>{{ t("field.hops") }}</th><th>{{ t("field.routes") }}</th></tr>
+      </thead>
+      <tbody>
+        {% for item in topology.hop_distribution %}
+        <tr><td>{{ item.hops }}</td><td>{{ item.count }}</td></tr>
+        {% else %}
+        <tr><td colspan="2" class="empty-state">-</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</section>
+{% endblock %}

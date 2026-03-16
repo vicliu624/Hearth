@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.timeline") }}</p>
+    <h1>{{ t("page.timeline") }}</h1>
+    <p class="page-subtitle">{{ timeline.total }} {{ t("timeline.total_events") }} · {{ timeline.bucket_count }} {{ t("timeline.time_buckets") }}</p>
+  </div>
+  <div class="hero-meta-pill"><a class="inline-link" href="{{ logs_href }}">{{ t("nav.logs") }}</a></div>
+</section>
+
+<section class="panel toolbar-panel">
+  <form class="toolbar toolbar--between" method="get" action="/timeline">
+    <div class="toolbar-group">
+      <label class="toolbar-field">
+        <span>{{ t("logs.level_filter") }}</span>
+        <select name="level">
+          <option value=""></option>
+          {% for item in levels %}
+          <option value="{{ item }}"{% if filters.level == item %} selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="toolbar-field">
+        <span>{{ t("logs.module_filter") }}</span>
+        <select name="module">
+          <option value=""></option>
+          {% for item in modules %}
+          <option value="{{ item }}"{% if filters.module == item %} selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="toolbar-field toolbar-field--small">
+        <span>{{ t("logs.since_minutes") }}</span>
+        <input type="number" name="since_minutes" min="0" value="{{ filters.since_minutes }}">
+      </label>
+      <label class="toolbar-field toolbar-field--small">
+        <span>{{ t("timeline.bucket_window") }}</span>
+        <input type="number" name="bucket_minutes" min="1" max="1440" value="{{ filters.bucket_minutes }}">
+      </label>
+      <label class="toolbar-field toolbar-field--small">
+        <span>{{ t("logs.limit") }}</span>
+        <input type="number" name="limit" min="1" max="1000" value="{{ filters.limit }}">
+      </label>
+    </div>
+    <div class="toolbar-group">
+      <button type="submit">{{ t("action.filter") }}</button>
+      <a class="button-link" href="{{ clear_timeline_href }}">{{ t("action.clear") }}</a>
+    </div>
+  </form>
+</section>
+
+<section class="metric-grid metric-grid--4">
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("timeline.total_events") }}</p>
+    <h2>{{ timeline.total }}</h2>
+    <p class="metric-card__subtext">{{ t("logs.limit") }} {{ filters.limit }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("timeline.critical_events") }}</p>
+    <h2>{{ timeline.critical_total }}</h2>
+    <p class="metric-card__subtext">{{ t("field.level") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("timeline.sources") }}</p>
+    <h2>{{ timeline.sources_total }}</h2>
+    <p class="metric-card__subtext">{{ t("field.source") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("timeline.time_buckets") }}</p>
+    <h2>{{ timeline.bucket_count }}</h2>
+    <p class="metric-card__subtext">{{ timeline.bucket_minutes }} min</p>
+  </article>
+</section>
+
+<section class="panel">
+  <div class="panel-header"><div><h2>{{ t("timeline.activity_buckets") }}</h2><p>{{ t("timeline.bucket_window") }} {{ timeline.bucket_minutes }} min</p></div></div>
+  <div class="traffic-chart">
+    {% for bucket in timeline.time_buckets %}
+    <div class="traffic-slot" title="{{ bucket.label }} · {{ bucket.count }}">
+      <span class="traffic-bar traffic-bar--tx" style="height: {{ bucket.count_height }};"></span>
+      {% if bucket.critical > 0 %}
+      <span class="traffic-bar traffic-bar--rx" style="height: {{ bucket.critical_height }};"></span>
+      {% endif %}
+      <span class="traffic-label">{{ bucket.label }}</span>
+    </div>
+    {% else %}
+    <p class="empty-state">{{ t("timeline.no_events") }}</p>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("timeline.sources") }}</h2></div></div>
+    <ul class="event-list">
+      {% for item in timeline.sources %}
+      <li class="event-item">
+        <div class="event-item__body">
+          <strong>{{ item.source }}</strong>
+          <span>{{ item.count }} {{ t("timeline.total_events") }}</span>
+        </div>
+      </li>
+      {% else %}
+      <li class="empty-state">{{ t("timeline.no_events") }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("field.level") }}</h2></div></div>
+    <ul class="event-list">
+      {% for item in timeline.severities %}
+      <li class="event-item">
+        <div class="event-item__body">
+          <strong>{{ item.severity }}</strong>
+          <span>{{ item.count }} {{ t("timeline.total_events") }}</span>
+        </div>
+      </li>
+      {% else %}
+      <li class="empty-state">{{ t("timeline.no_events") }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+</section>
+
+<section class="panel table-panel">
+  <div class="panel-header"><div><h2>{{ t("timeline.recent_events") }}</h2></div></div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.time") }}</th>
+        <th>{{ t("field.level") }}</th>
+        <th>{{ t("field.source") }}</th>
+        <th>{{ t("logs.event_type") }}</th>
+        <th>{{ t("field.message") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in timeline.events %}
+      <tr>
+        <td>{{ entry.created_at }}</td>
+        <td><span class="status-chip status-chip--{{ entry.tone }}">{{ entry.severity }}</span></td>
+        <td>{{ entry.source }}</td>
+        <td>{{ entry.event_type }}</td>
+        <td>{{ entry.message }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5">{{ t("timeline.no_events") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

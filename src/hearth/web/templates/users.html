@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.users") }}</p>
+    <h1>{{ t("page.users") }}</h1>
+    <p class="page-subtitle">{{ page_total }} {{ t("users.total") }}</p>
+  </div>
+</section>
+
+<section class="panel toolbar-panel compact-toolbar">
+  <form method="post" action="{{ request.url.path }}" class="toolbar toolbar--between">
+    <div class="toolbar-group">
+      <input type="hidden" name="action" value="create_user">
+      <label class="toolbar-field">
+        <span>{{ t("field.user") }}</span>
+        <input type="text" name="username" required>
+      </label>
+      <label class="toolbar-field">
+        <span>{{ t("users.display_name") }}</span>
+        <input type="text" name="display_name">
+      </label>
+      <label class="toolbar-field toolbar-field--small">
+        <span>{{ t("field.role") }}</span>
+        <select name="role">
+          {% for role in role_options %}
+          <option value="{{ role.name }}">{{ role.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="toolbar-group">
+      <button type="submit">{{ t("users.create") }}</button>
+    </div>
+  </form>
+</section>
+
+<section class="panel table-panel">
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.user") }}</th>
+        <th>{{ t("field.role") }}</th>
+        <th>{{ t("field.status") }}</th>
+        <th>{{ t("nav.tokens") }}</th>
+        <th>{{ t("field.time") }}</th>
+        <th>{{ t("users.actions") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in users %}
+      <tr>
+        <td>
+          <strong>{{ user.username }}</strong>
+          <div class="muted">{{ user.display_name or '-' }}</div>
+        </td>
+        <td>{{ tv(user.role) }}</td>
+        <td><span class="status-chip status-chip--{{ 'success' if user.enabled else 'warning' }}">{{ tv('enabled' if user.enabled else 'disabled') }}</span></td>
+        <td>{{ user.token_count or 0 }}</td>
+        <td>{{ tr(user.last_login_at) if user.last_login_at else '-' }}</td>
+        <td>
+          {% if user.builtin %}
+          <span class="muted">{{ t("users.builtin") }}</span>
+          {% else %}
+          <form method="post" action="{{ request.url.path }}" class="inline-form">
+            <input type="hidden" name="username" value="{{ user.username }}">
+            <select name="role">
+              {% for role in role_options %}
+              <option value="{{ role.name }}"{% if role.name == user.role %} selected{% endif %}>{{ role.label }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" name="action" value="set_role">{{ t("users.change_role") }}</button>
+            <button type="submit" name="action" value="{{ 'disable_user' if user.enabled else 'enable_user' }}">{{ t('users.disable' if user.enabled else 'users.enable') }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

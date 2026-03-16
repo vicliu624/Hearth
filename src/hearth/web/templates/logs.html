@@ -1,0 +1,78 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.logs") }}</p>
+    <h1>{{ t("logs.title") }}</h1>
+    <p class="page-subtitle">{{ shell_summary.node_name }} · {{ shell_summary.restart_count }} restarts</p>
+  </div>
+  <div class="hero-meta-pill"><a class="inline-link" href="{{ timeline_href }}">{{ t("page.timeline") }}</a></div>
+</section>
+
+<section class="panel toolbar-panel">
+  <form class="toolbar toolbar--between" method="get" action="/logs">
+    <div class="toolbar-group">
+      <label class="toolbar-field">
+        <span>{{ t("logs.level_filter") }}</span>
+        <select name="level">
+          <option value=""></option>
+          {% for item in levels %}
+          <option value="{{ item }}"{% if filters.level == item %} selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="toolbar-field">
+        <span>{{ t("logs.module_filter") }}</span>
+        <select name="module">
+          <option value=""></option>
+          {% for item in modules %}
+          <option value="{{ item }}"{% if filters.module == item %} selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="toolbar-field toolbar-field--small">
+        <span>{{ t("logs.since_minutes") }}</span>
+        <input type="number" name="since_minutes" min="0" value="{{ filters.since_minutes }}">
+      </label>
+      <label class="toolbar-field toolbar-field--small">
+        <span>{{ t("logs.limit") }}</span>
+        <input type="number" name="limit" min="1" max="500" value="{{ filters.limit }}">
+      </label>
+    </div>
+    <div class="toolbar-group">
+      <button type="submit">{{ t("action.filter") }}</button>
+      <a class="button-link" href="{{ clear_logs_href }}">{{ t("action.clear") }}</a>
+    </div>
+  </form>
+</section>
+
+<section class="panel table-panel">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.time") }}</th>
+        <th>{{ t("field.level") }}</th>
+        <th>{{ t("field.source") }}</th>
+        <th>{{ t("logs.event_type") }}</th>
+        <th>{{ t("field.message") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in logs %}
+      <tr>
+        <td>{{ entry.created_at }}</td>
+        <td><span class="status-chip status-chip--{{ entry.tone }}">{{ entry.severity }}</span></td>
+        <td>{{ entry.source }}</td>
+        <td>{{ entry.event_type }}</td>
+        <td>{{ entry.message }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5">{{ t("empty.logs") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

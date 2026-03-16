@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.backup") }}</p>
+    <h1>{{ t("backup.title") }}</h1>
+    <p class="page-subtitle">Archive export/import, snapshots, retention pruning, and disaster recovery guidance.</p>
+  </div>
+  <div class="hero-meta-pill">{{ t("field.uptime") }} · {{ header_state.uptime_compact }}</div>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("backup.title") }}</h2></div></div>
+    <dl class="system-grid">
+      <dt>{{ t("field.config") }}</dt><dd>{{ plan.config or '-' }}</dd>
+      <dt>{{ t("field.database") }}</dt><dd>{{ plan.database }}</dd>
+      <dt>{{ t("field.identity") }}</dt><dd>{{ plan.identity }}</dd>
+      <dt>{{ t("field.backups_dir") }}</dt><dd>{{ plan.backups_dir }}</dd>
+      <dt>Snapshots</dt><dd>{{ snapshots | length }}</dd>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>Create Backup</h2></div></div>
+    <form method="post" action="{{ request.url.path }}">
+      <label class="toolbar-field stacked-field"><span>{{ t("backup.destination_path") }}</span><input type="text" name="destination_path" placeholder="{{ plan.backups_dir }}"></label>
+      <div class="toolbar compact-toolbar">
+        <button type="submit" name="action" value="export">{{ t("action.export") }}</button>
+        <button type="submit" name="action" value="snapshot">Create Snapshot</button>
+      </div>
+    </form>
+  </section>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("backup.import_title") }}</h2></div></div>
+    <form method="post" action="{{ request.url.path }}">
+      <label class="toolbar-field stacked-field"><span>{{ t("backup.import_path") }}</span><input type="text" name="archive_path" placeholder="{{ archives[0].path if archives else '' }}"></label>
+      <div class="toolbar compact-toolbar"><button type="submit" name="action" value="import">{{ t("action.import") }}</button></div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>Snapshot Retention</h2></div></div>
+    <form method="post" action="{{ request.url.path }}">
+      <input type="hidden" name="action" value="prune">
+      <label class="toolbar-field stacked-field"><span>Keep newest</span><input type="number" name="keep" min="0" value="10"></label>
+      <label class="toolbar-field stacked-field"><span>Max age (days)</span><input type="number" name="max_age_days" min="0" placeholder="30"></label>
+      <div class="toolbar compact-toolbar"><button type="submit">Prune Snapshots</button></div>
+    </form>
+  </section>
+</section>
+
+<section class="panel table-panel">
+  <div class="panel-header"><div><h2>{{ t("backup.archives") }}</h2></div></div>
+  <table class="data-table compact-table">
+    <thead><tr><th>{{ t("field.archive_path") }}</th><th>{{ t("action.view_details") }}</th></tr></thead>
+    <tbody>
+      {% for archive in archives %}
+      <tr><td>{{ archive.path }}</td><td><a class="inline-link" href="{{ archive.detail_href }}">{{ t("action.view_details") }}</a></td></tr>
+      {% else %}
+      <tr><td colspan="2" class="empty-state">{{ t("empty.archives") }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="panel table-panel">
+  <div class="panel-header"><div><h2>Snapshots</h2></div></div>
+  <table class="data-table compact-table">
+    <thead><tr><th>{{ t("field.time") }}</th><th>Kind</th><th>{{ t("field.archive_path") }}</th><th>{{ t("field.status") }}</th><th>{{ t("action.view_details") }}</th></tr></thead>
+    <tbody>
+      {% for item in snapshots %}
+      <tr>
+        <td>{{ tr(item.created_at) }}</td>
+        <td>{{ item.kind }}</td>
+        <td>{{ item.archive_path }}</td>
+        <td>{{ 'Present' if item.exists else 'Missing' }}</td>
+        <td><a class="inline-link" href="{{ item.detail_href }}">{{ t("action.view_details") }}</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty-state">No snapshots recorded yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="panel">
+  <div class="panel-header"><div><h2>Disaster Recovery Helper</h2></div></div>
+  <form method="post" action="{{ request.url.path }}" class="toolbar compact-toolbar">
+    <input type="hidden" name="action" value="dr_helper">
+    <label class="toolbar-field"><span>{{ t("backup.import_path") }}</span><input type="text" name="archive_path" placeholder="{{ dr_helper.selected_archive or (archives[0].path if archives else '') }}"></label>
+    <button type="submit">Refresh Checklist</button>
+  </form>
+  <p class="muted">Selected archive: {{ dr_helper.selected_archive or '-' }}</p>
+  <ol class="detail-list">
+    {% for step in dr_helper.steps %}
+    <li>{{ step }}</li>
+    {% endfor %}
+  </ol>
+</section>
+
+{% if result %}
+<section class="panel">
+  <div class="panel-header"><div><h2>{{ t("backup.operation_result") }}</h2></div></div>
+  <pre>{{ result | tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+{% endblock %}

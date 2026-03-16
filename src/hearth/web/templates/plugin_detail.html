@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.plugins") }}</p>
+    <h1>{{ plugin.name }}</h1>
+    <p class="page-subtitle">{{ plugin.type }} · {{ plugin.source }} · {{ plugin.state_label }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ tv('enabled' if plugin.enabled else 'disabled') if plugin.installed else plugin.state_label }}</div>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("plugins.detail") }}</h2></div></div>
+    <dl class="system-grid">
+      <dt>{{ t("field.name") }}</dt><dd>{{ plugin.name }}</dd>
+      <dt>{{ t("field.type") }}</dt><dd>{{ plugin.type }}</dd>
+      <dt>{{ t("field.source") }}</dt><dd>{{ plugin.source }}</dd>
+      <dt>Catalog State</dt><dd>{{ plugin.state_label }}</dd>
+      <dt>{{ t("field.status") }}</dt><dd>{{ tv('enabled' if plugin.enabled else 'disabled') if plugin.installed else '-' }}</dd>
+      <dt>{{ t("plugins.version") }}</dt><dd>{{ plugin.version }}</dd>
+      <dt>Catalog Version</dt><dd>{{ plugin.catalog_version or '-' }}</dd>
+      <dt>{{ t("plugins.compatibility") }}</dt><dd>{{ plugin.compatibility }}</dd>
+      <dt>{{ t("plugins.trusted") }}</dt><dd>{{ tv('enabled' if plugin.trusted_source else 'disabled') }}</dd>
+      <dt>{{ t("plugins.signature_status") }}</dt><dd>{{ tv(plugin.signature_status) if plugin.signature_status else '-' }}</dd>
+      <dt>Installable</dt><dd>{{ 'Yes' if plugin.installable else 'No' }}</dd>
+      <dt>Sandbox</dt><dd>{{ plugin.sandbox_boundary.runtime_scope if plugin.sandbox_boundary else '-' }}</dd>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("plugins.controls") }}</h2></div></div>
+    <p class="muted">{{ plugin.description or plugin.catalog_description or '-' }}</p>
+    <div class="toolbar compact-toolbar">
+      {% if plugin.installed %}
+      <form method="post" action="{{ request.url.path }}" class="inline-form">
+        <button type="submit" name="action" value="{{ 'disable' if plugin.enabled else 'enable' }}">{{ t('plugins.disable' if plugin.enabled else 'plugins.enable') }}</button>
+      </form>
+      <form method="post" action="{{ request.url.path }}" class="inline-form">
+        <button type="submit" name="action" value="update">Update from Catalog</button>
+      </form>
+      <form method="post" action="{{ request.url.path }}" class="inline-form">
+        <label class="toolbar-field toolbar-field--small"><span>Remove dependents</span><input type="checkbox" name="remove_dependents" value="true"></label>
+        <button type="submit" name="action" value="uninstall">Uninstall</button>
+      </form>
+      {% else %}
+      <form method="post" action="{{ request.url.path }}" class="inline-form">
+        <label class="toolbar-field toolbar-field--small"><span>Enable after install</span><input type="checkbox" name="enabled" value="true" checked></label>
+        <button type="submit" name="action" value="install">Install</button>
+      </form>
+      {% endif %}
+      <form method="post" action="{{ request.url.path }}" class="inline-form">
+        <button type="submit" name="action" value="refresh_sources">Refresh Sources</button>
+      </form>
+      <a class="button-link" href="{{ plugin_sources_href }}">{{ t("page.plugin_sources") }}</a>
+      <a class="button-link" href="{{ plugins_href }}">{{ t("plugins.back") }}</a>
+    </div>
+  </section>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("plugins.permissions") }}</h2></div></div>
+    <ul class="detail-list">
+      {% for item in plugin.permissions %}
+      <li>{{ item }}</li>
+      {% else %}
+      <li>-</li>
+      {% endfor %}
+    </ul>
+    <div class="panel-header"><div><h2>{{ t("plugins.dependencies") }}</h2></div></div>
+    <ul class="detail-list">
+      {% for item in plugin.depends_on %}
+      <li>{{ item }}</li>
+      {% else %}
+      <li>-</li>
+      {% endfor %}
+    </ul>
+    {% if dependency_plan %}
+    <div class="panel-header"><div><h2>Resolved Install Plan</h2></div></div>
+    <ul class="detail-list">
+      {% for item in dependency_plan %}
+      <li>{{ item.name }} · {{ item.version }} · {{ item.source }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("plugins.diagnostics") }}</h2></div></div>
+    <dl class="system-grid">
+      {% for key, value in plugin.diagnostics.items() %}
+      <dt>{{ key }}</dt><dd>{{ value }}</dd>
+      {% endfor %}
+      {% if plugin.sandbox_boundary %}
+      <dt>Filesystem</dt><dd>{{ plugin.sandbox_boundary.filesystem | join(', ') if plugin.sandbox_boundary.filesystem else '-' }}</dd>
+      <dt>Network</dt><dd>{{ plugin.sandbox_boundary.network | join(', ') if plugin.sandbox_boundary.network else '-' }}</dd>
+      {% endif %}
+    </dl>
+    <div class="panel-header"><div><h2>{{ t("plugins.config") }}</h2></div></div>
+    <pre>{{ plugin.config | tojson(indent=2) }}</pre>
+  </section>
+</section>
+
+<section class="panel table-panel">
+  <div class="panel-header"><div><h2>Recent Operations</h2></div></div>
+  <table class="data-table compact-table">
+    <thead><tr><th>{{ t("field.time") }}</th><th>Operation</th><th>{{ t("field.summary") }}</th></tr></thead>
+    <tbody>
+      {% for item in plugin_history %}
+      <tr>
+        <td>{{ tr(item.created_at) }}</td>
+        <td>{{ item.operation }}</td>
+        <td>{{ item.payload | tojson }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="empty-state">No plugin history for this entry.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if result %}
+<section class="panel">
+  <div class="panel-header"><div><h2>Result</h2></div></div>
+  <pre>{{ result | tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+{% endblock %}

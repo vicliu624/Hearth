@@ -1,0 +1,112 @@
+﻿﻿{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.interfaces") }}</p>
+    <h1>{{ t("page.interfaces") }}</h1>
+    <p class="page-subtitle">{{ shell_summary.interface_summary.online }} / {{ shell_summary.interface_summary.total }} {{ t("field.interfaces") }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ t("field.uptime") }} · {{ header_state.uptime_compact }}</div>
+</section>
+
+<section class="metric-grid metric-grid--5">
+  <article class="metric-card metric-card--success">
+    <p class="metric-card__eyebrow">{{ t("dashboard.node_status") }}</p>
+    <h2>{{ tv(shell_summary.health_status) }}</h2>
+    <p class="metric-card__subtext">{{ tv(shell_summary.runtime_status) }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.uptime") }}</p>
+    <h2>{{ header_state.uptime_compact }}</h2>
+    <p class="metric-card__subtext">{{ header_state.uptime_verbose }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.interfaces") }}</p>
+    <h2>{{ shell_summary.interface_summary.total }}</h2>
+    <p class="metric-card__subtext">{{ shell_summary.interface_summary.online }} / {{ shell_summary.interface_summary.total }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.peers") }}</p>
+    <h2>{{ shell_summary.peer_count }}</h2>
+    <p class="metric-card__subtext">{{ t("dashboard.peers") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.routes") }}</p>
+    <h2>{{ shell_summary.route_count }}</h2>
+    <p class="metric-card__subtext">{{ t("dashboard.routes") }}</p>
+  </article>
+</section>
+
+<section class="panel table-panel">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.name") }}</th>
+        <th>{{ t("field.type") }}</th>
+        <th>{{ t("field.status") }}</th>
+        <th>{{ t("field.health") }}</th>
+        <th>{{ t("field.rx_tx") }}</th>
+        <th>{{ t("field.actions") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for interface in interfaces %}
+      <tr>
+        <td>{{ interface.name }}</td>
+        <td>{{ interface.type }}</td>
+        <td><span class="status-chip status-chip--{{ interface.tone }}">{{ tv(interface.status) }}</span></td>
+        <td>{{ tv(interface.health_status) }}</td>
+        <td>{{ interface.rx_tx }}</td>
+        <td>
+          <form class="inline-form" method="post" action="{{ interface.control_href }}">
+            <input type="hidden" name="selected" value="{{ interface.name }}">
+            <button type="submit" name="action" value="start">{{ t("action.start") }}</button>
+            <button type="submit" name="action" value="stop">{{ t("action.stop") }}</button>
+            <button type="submit" name="action" value="restart">{{ t("action.restart") }}</button>
+            <a class="button-link" href="{{ interface.metrics_href }}">{{ t("action.view_metrics") }}</a>
+          </form>
+        </td>
+      </tr>
+      {% if interface.last_error %}
+      <tr>
+        <td colspan="6" class="muted">{{ t("interfaces.last_error", error=interface.last_error) }}</td>
+      </tr>
+      {% endif %}
+      {% else %}
+      <tr>
+        <td colspan="6">{{ t("empty.interfaces") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if selected_metrics %}
+<section class="panel">
+  <div class="panel-header">
+    <div>
+      <h2>{{ t("interfaces.metrics_for", name=selected_name) }}</h2>
+      <p>{{ t("section.metrics") }}</p>
+    </div>
+  </div>
+  <dl class="system-grid">
+    {% for key, value in selected_metrics.items() %}
+    <dt>{{ key }}</dt>
+    <dd>{{ value }}</dd>
+    {% endfor %}
+  </dl>
+</section>
+{% endif %}
+
+{% if result %}
+<section class="panel">
+  <div class="panel-header">
+    <div>
+      <h2>{{ t("config.operation_result") }}</h2>
+    </div>
+  </div>
+  <pre>{{ result | tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+{% endblock %}

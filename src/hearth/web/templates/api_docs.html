@@ -1,0 +1,54 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.docs") }}</p>
+    <h1>{{ t("page.api_docs") }}</h1>
+    <p class="page-subtitle">{{ api_base }}</p>
+  </div>
+  <div class="inline-form">
+    <a class="button-link" href="{{ swagger_href }}" target="_blank" rel="noreferrer">{{ t("docs.swagger") }}</a>
+    <a class="button-link" href="{{ redoc_href }}" target="_blank" rel="noreferrer">{{ t("docs.redoc") }}</a>
+    <a class="button-link" href="{{ openapi_href }}" target="_blank" rel="noreferrer">{{ t("docs.openapi") }}</a>
+  </div>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("docs.api_base") }}</h2></div></div>
+    <pre>{{ api_base }}</pre>
+    <div class="panel-header"><div><h2>{{ t("docs.auth_hint") }}</h2></div></div>
+    <p>{{ t("docs.auth_hint") }}</p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("docs.examples") }}</h2></div></div>
+    <pre>{{ examples.fleet }}</pre>
+    <pre>{{ examples.events }}</pre>
+    <pre>{{ examples.topology }}</pre>
+  </section>
+</section>
+
+<section class="panel table-panel">
+  <div class="panel-header"><div><h2>{{ t("nav.docs") }}</h2></div></div>
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.name") }}</th>
+        <th>{{ t("field.type") }}</th>
+        <th>{{ t("field.summary") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in endpoints %}
+      <tr>
+        <td>{{ item.label }}</td>
+        <td><code>{{ item.path }}</code></td>
+        <td><a class="inline-link" href="{{ item.path }}" target="_blank" rel="noreferrer">{{ item.path }}</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

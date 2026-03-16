@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.alerts") }}</p>
+    <h1>{{ t("page.alerts") }}</h1>
+    <p class="page-subtitle">{{ summary.node_name }} · {{ tv(summary.runtime_status) }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ alert_summary.total }} {{ t("alerts.total") }}</div>
+</section>
+
+<section class="metric-grid metric-grid--4">
+  <article class="metric-card metric-card--danger">
+    <p class="metric-card__eyebrow">{{ t("alerts.critical") }}</p>
+    <h2>{{ alert_summary.critical }}</h2>
+    <p class="metric-card__subtext">{{ t("alerts.total") }}</p>
+  </article>
+  <article class="metric-card metric-card--warning">
+    <p class="metric-card__eyebrow">{{ t("alerts.warning") }}</p>
+    <h2>{{ alert_summary.warning }}</h2>
+    <p class="metric-card__subtext">{{ t("alerts.total") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("alerts.healthy") }}</p>
+    <h2>{{ alert_summary.healthy }}</h2>
+    <p class="metric-card__subtext">{{ t("field.health") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.interfaces") }}</p>
+    <h2>{{ summary.interface_summary.online }}</h2>
+    <p class="metric-card__subtext">{{ summary.interface_summary.total }} total</p>
+  </article>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("alerts.security_findings") }}</h2>
+      </div>
+    </div>
+    <ul class="event-list">
+      {% for key in security_findings %}
+      <li class="event-item">
+        <span class="status-dot status-dot--warning"></span>
+        <div class="event-item__body">
+          <strong>{{ t(key) }}</strong>
+        </div>
+      </li>
+      {% else %}
+      <li class="empty-state">{{ t("alerts.no_active") }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("alerts.rule_sources") }}</h2>
+      </div>
+    </div>
+    <ul class="detail-list">
+      {% for item in rule_sources %}
+      <li>{{ item }}</li>
+      {% else %}
+      <li>{{ t("alerts.no_rules") }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="panel panel--wide">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("alerts.feed") }}</h2>
+      </div>
+    </div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.time") }}</th>
+          <th>{{ t("field.status") }}</th>
+          <th>{{ t("field.source") }}</th>
+          <th>{{ t("field.summary") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for alert in alerts %}
+        <tr>
+          <td>{{ tr(alert.created_at) }}</td>
+          <td><span class="status-chip status-chip--{{ alert.tone }}">{{ tv(alert.severity) }}</span></td>
+          <td>{{ alert.source }}</td>
+          <td><strong>{{ alert.title }}</strong><br>{{ alert.message }}{% if alert.rule_source %}<br><span class="muted">{{ alert.rule_source }}</span>{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" class="empty-state">{{ t("alerts.no_active") }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("alerts.hook_status") }}</h2>
+      </div>
+    </div>
+    <dl class="system-grid">
+      <dt>{{ t("field.status") }}</dt><dd>{{ tv('enabled' if alert_hooks.enabled else 'disabled') }}</dd>
+      <dt>{{ t("alerts.webhook_url") }}</dt><dd>{{ alert_hooks.webhook_url or '-' }}</dd>
+      <dt>{{ t("alerts.include_resolved") }}</dt><dd>{{ tv('enabled' if alert_hooks.include_resolved else 'disabled') }}</dd>
+      <dt>{{ t("alerts.delivery_timeout") }}</dt><dd>{{ alert_hooks.delivery_timeout_sec or 0 }}s</dd>
+      <dt>{{ t("alerts.last_delivery") }}</dt>
+      <dd>
+        {% if alert_hooks.last_delivery %}
+        {{ tr(alert_hooks.last_delivery.created_at) }} · {{ alert_hooks.last_delivery.event_type }}
+        {% else %}
+        -
+        {% endif %}
+      </dd>
+    </dl>
+  </section>
+
+  <section class="panel panel--wide">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("alerts.history") }}</h2>
+      </div>
+    </div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.time") }}</th>
+          <th>{{ t("field.status") }}</th>
+          <th>{{ t("field.source") }}</th>
+          <th>{{ t("field.summary") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in alert_history %}
+        <tr>
+          <td>{{ tr(row.created_at) }}</td>
+          <td><span class="status-chip status-chip--{{ row.tone }}">{{ row.transition }}</span></td>
+          <td>{{ row.source }}</td>
+          <td>
+            <strong>{{ row.title }}</strong><br>
+            {{ row.message }}
+            {% if row.endpoint %}<br><span class="muted">{{ row.endpoint }}</span>{% endif %}
+            {% if row.error %}<br><span class="muted">{{ row.error }}</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" class="empty-state">{{ t("alerts.no_history") }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</section>
+{% endblock %}

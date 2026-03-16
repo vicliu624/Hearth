@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.diagnostics") }}</p>
+    <h1>{{ t("page.diagnostics") }}</h1>
+    <p class="page-subtitle">{{ summary.node_name }} &middot; {{ tv(summary.runtime_status) }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ t("field.uptime") }} &middot; {{ header_state.uptime_compact }}</div>
+</section>
+
+<section class="metric-grid metric-grid--4">
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.runtime") }}</p>
+    <h2>{{ tv(diagnostics.runtime.runtime_status) }}</h2>
+    <p class="metric-card__subtext">{{ tv(diagnostics.runtime.health_status) }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("diagnostics.scheduler") }}</p>
+    <h2>{{ tv('enabled' if diagnostics.scheduler.running else 'disabled') }}</h2>
+    <p class="metric-card__subtext">{{ diagnostics.scheduler.tasks | length }} {{ t("diagnostics.task_list") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("config.revisions") }}</p>
+    <h2>{{ diagnostics.config_revisions.count }}</h2>
+    <p class="metric-card__subtext">{{ t("diagnostics.latest_revision") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.platform") }}</p>
+    <h2>{{ diagnostics.hearth_version }}</h2>
+    <p class="metric-card__subtext">Python {{ diagnostics.python }}</p>
+  </article>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("diagnostics.runtime_snapshot") }}</h2></div></div>
+    <dl class="system-grid">
+      <dt>{{ t("field.node") }}</dt><dd>{{ diagnostics.runtime.node_name }}</dd>
+      <dt>{{ t("field.runtime") }}</dt><dd>{{ tv(diagnostics.runtime.runtime_status) }}</dd>
+      <dt>{{ t("field.health") }}</dt><dd>{{ tv(diagnostics.runtime.health_status) }}</dd>
+      <dt>{{ t("field.uptime") }}</dt><dd>{{ diagnostics.runtime.uptime_seconds or 0 }}</dd>
+      <dt>{{ t("field.issue") }}</dt><dd>{{ diagnostics.runtime.issues | length }}</dd>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("diagnostics.environment") }}</h2></div></div>
+    <dl class="system-grid">
+      <dt>{{ t("field.hearth_version") }}</dt><dd>{{ diagnostics.hearth_version }}</dd>
+      <dt>{{ t("field.python") }}</dt><dd>{{ diagnostics.python }}</dd>
+      <dt>{{ t("field.platform") }}</dt><dd>{{ diagnostics.platform }}</dd>
+    </dl>
+  </section>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("diagnostics.paths") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr><th>{{ t("field.path") }}</th><th>{{ t("field.value") }}</th></tr>
+      </thead>
+      <tbody>
+        {% for key, value in diagnostics.paths.items() %}
+        <tr><td>{{ key }}</td><td>{{ value or '-' }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("diagnostics.scheduler") }}</h2></div></div>
+    <ul class="detail-list">
+      {% for item in diagnostics.scheduler.tasks %}
+      <li>{{ item }}</li>
+      {% else %}
+      <li>{{ t("diagnostics.no_tasks") }}</li>
+      {% endfor %}
+    </ul>
+    <div class="panel-header"><div><h2>{{ t("diagnostics.latest_revision") }}</h2></div></div>
+    {% if latest_revision_pretty %}
+    <pre>{{ latest_revision_pretty }}</pre>
+    {% else %}
+    <div class="empty-state">-</div>
+    {% endif %}
+  </section>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("diagnostics.plugin_diagnostics") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.name") }}</th>
+          <th>{{ t("field.type") }}</th>
+          <th>{{ t("field.source") }}</th>
+          <th>{{ t("field.status") }}</th>
+          <th>{{ t("field.summary") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for plugin in diagnostics.plugins %}
+        <tr>
+          <td>{{ plugin.name }}</td>
+          <td>{{ plugin.type }}</td>
+          <td>{{ plugin.source }}</td>
+          <td>{{ tv('enabled' if plugin.enabled else 'disabled') }}</td>
+          <td>{{ plugin.diagnostics }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="empty-state">-</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("diagnostics.service_diagnostics") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.name") }}</th>
+          <th>{{ t("field.status") }}</th>
+          <th>{{ t("field.health") }}</th>
+          <th>{{ t("field.summary") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for service in diagnostics.services %}
+        <tr>
+          <td>{{ service.name }}</td>
+          <td>{{ tv(service.status) }}</td>
+          <td>{{ tv(service.health) }}</td>
+          <td>{{ service.actions | join(', ') }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="empty-state">-</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel panel--wide">
+    <div class="panel-header"><div><h2>{{ t("diagnostics.recent_events") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.time") }}</th>
+          <th>{{ t("field.source") }}</th>
+          <th>{{ t("field.status") }}</th>
+          <th>{{ t("field.summary") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for event in recent_events %}
+        <tr>
+          <td>{{ tr(event.created_at) }}</td>
+          <td>{{ event.source }}</td>
+          <td><span class="status-chip status-chip--{{ event.tone }}">{{ tv(event.severity) }}</span></td>
+          <td>{{ event.message }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="empty-state">{{ t("empty.logs") }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("diagnostics.restart_history") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.time") }}</th>
+          <th>{{ t("field.type") }}</th>
+          <th>{{ t("field.name") }}</th>
+          <th>{{ t("field.summary") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for restart in restart_history %}
+        <tr>
+          <td>{{ tr(restart.created_at) }}</td>
+          <td>{{ restart.target_type }}</td>
+          <td>{{ restart.target_name }}</td>
+          <td>{{ restart.reason }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="empty-state">{{ t("diagnostics.no_restarts") }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</section>
+{% endblock %}

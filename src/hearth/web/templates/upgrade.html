@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.upgrade") }}</p>
+    <h1>{{ t("page.upgrade") }}</h1>
+    <p class="page-subtitle">{{ page_total }} {{ t("upgrade.operations") }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ t("field.version") }} &middot; {{ shell_summary.node_name }}</div>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel panel--wide">
+    <div class="panel-header"><div><h2>{{ t("upgrade.schedule") }}</h2></div></div>
+    <p class="muted">Remote upgrades and rollbacks dispatch through each node's management `dashboard_url`; local upgrades execute with the current Python environment.</p>
+    <form method="post" action="{{ request.url.path }}">
+      <div class="toolbar compact-toolbar">
+        <label class="toolbar-field toolbar-field--small"><span>{{ t("rollout.action_type") }}</span>
+          <select name="action">
+            <option value="upgrade">upgrade</option>
+            <option value="rollback">rollback</option>
+          </select>
+        </label>
+        <label class="toolbar-field toolbar-field--small"><span>{{ t("upgrade.target_version") }}</span><input type="text" name="target_version" required></label>
+        <label class="toolbar-field toolbar-field--small"><span>{{ t("field.channel") }}</span><input type="text" name="channel" value="stable"></label>
+        <label class="toolbar-field toolbar-field--small"><span>{{ t("field.group") }}</span>
+          <select name="target_group"><option value="">-</option>{% for group in groups %}<option value="{{ group.name }}">{{ group.name }}</option>{% endfor %}</select>
+        </label>
+        <label class="toolbar-field"><span>{{ t("field.targets") }}</span><input type="text" name="target_nodes" placeholder="node-a,node-b"></label>
+      </div>
+      <div class="toolbar compact-toolbar">
+        <label class="toolbar-field"><span>{{ t("field.notes") }}</span><input type="text" name="notes"></label>
+        <label class="toolbar-field toolbar-field--small"><span>{{ t("upgrade.enable_maintenance") }}</span><input type="checkbox" name="enable_maintenance" value="true"></label>
+        <button type="submit">{{ t("upgrade.schedule") }}</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>{{ t("upgrade.recent_revisions") }}</h2></div></div>
+    <table class="data-table compact-table">
+      <thead><tr><th>ID</th><th>{{ t("field.time") }}</th><th>{{ t("field.summary") }}</th></tr></thead>
+      <tbody>
+        {% for item in revisions %}
+        <tr><td>#{{ item.id }}</td><td>{{ tr(item.created_at) }}</td><td>{{ item.revision_label }}</td></tr>
+        {% else %}
+        <tr><td colspan="3" class="empty-state">-</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</section>
+
+{% if result %}
+<section class="panel">
+  <div class="panel-header"><div><h2>Latest Result</h2></div></div>
+  <pre>{{ result | tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+
+<section class="panel table-panel">
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>{{ t("rollout.action_type") }}</th>
+        <th>{{ t("field.version") }}</th>
+        <th>{{ t("field.channel") }}</th>
+        <th>{{ t("field.targets") }}</th>
+        <th>{{ t("field.status") }}</th>
+        <th>{{ t("field.notes") }}</th>
+        <th>{{ t("field.time") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in operations %}
+      <tr>
+        <td>#{{ item.id }}</td>
+        <td>{{ item.action }}</td>
+        <td>{{ item.current_version }} &rarr; {{ item.target_version }}</td>
+        <td>{{ item.channel }}</td>
+        <td>{{ ', '.join(item.resolved_nodes) if item.resolved_nodes else '-' }}</td>
+        <td><span class="status-chip status-chip--{{ item.tone }}">{{ tv(item.status) }}</span></td>
+        <td>{{ item.notes or '-' }}</td>
+        <td>{{ tr(item.created_at) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="empty-state">{{ t("upgrade.no_operations") }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

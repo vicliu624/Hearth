@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.dashboard") }}</p>
+    <h1>{{ t("page.dashboard") }}</h1>
+    <p class="page-subtitle">{{ summary.node_name }} · {{ tv(summary.health_status) }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ t("field.uptime") }} · {{ header_state.uptime_compact }}</div>
+</section>
+
+<section class="metric-grid metric-grid--5">
+  <article class="metric-card metric-card--success">
+    <div class="metric-card__icon status-dot status-dot--success"></div>
+    <div>
+      <p class="metric-card__label">{{ t("dashboard.node_status") }}</p>
+      <h2>{{ tv(summary.health_status) }}</h2>
+      <p class="metric-card__subtext">{{ tv(summary.runtime_status) }}</p>
+    </div>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("field.uptime") }}</p>
+    <h2>{{ header_state.uptime_compact }}</h2>
+    <p class="metric-card__subtext">{{ header_state.uptime_compact }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("dashboard.connected_interfaces") }}</p>
+    <h2>{{ summary.interface_summary.online }}</h2>
+    <p class="metric-card__subtext">{{ summary.interface_summary.total }} {{ t("field.interfaces") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("dashboard.active_peers") }}</p>
+    <h2>{{ summary.peer_count }}</h2>
+    <p class="metric-card__subtext">{{ t("dashboard.peers") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("dashboard.total_routes") }}</p>
+    <h2>{{ summary.route_count }}</h2>
+    <p class="metric-card__subtext">{{ t("dashboard.routes") }}</p>
+  </article>
+</section>
+
+<section class="dashboard-grid dashboard-grid--hero">
+  <section class="panel panel--wide">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("dashboard.network_activity") }}</h2>
+        <p>{{ t("dashboard.traffic_last_24h") }}</p>
+      </div>
+    </div>
+    <div class="metric-ribbon">
+      <article>
+        <span>{{ t("dashboard.activity_rate") }}</span>
+        <strong>{{ traffic_snapshot.rx_packets }}</strong>
+      </article>
+      <article>
+        <span>{{ t("dashboard.traffic") }}</span>
+        <strong>{{ traffic_snapshot.tx_packets }}</strong>
+      </article>
+      <article>
+        <span>{{ t("dashboard.errors") }}</span>
+        <strong>{{ traffic_snapshot.error_count }}</strong>
+      </article>
+    </div>
+    {% if activity_bars %}
+    <div class="traffic-chart">
+      {% for point in activity_bars %}
+      <div class="traffic-slot" title="{{ point.title }} · RX {{ point.rx_value }} · TX {{ point.tx_value }}">
+        <span class="traffic-bar traffic-bar--rx" style="height: {{ point.rx_height }}%"></span>
+        <span class="traffic-bar traffic-bar--tx" style="height: {{ point.tx_height }}%"></span>
+        <span class="traffic-label">{{ point.label }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">{{ t("empty.interfaces") }}</div>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-header panel-header--split">
+      <div>
+        <h2>{{ t("dashboard.recent_events") }}</h2>
+        <p>{{ t("dashboard.logs") }}</p>
+      </div>
+      <a class="inline-link" href="{{ view_all_logs_href }}">{{ t("dashboard.view_all") }}</a>
+    </div>
+    <ul class="event-list">
+      {% for entry in logs[:4] %}
+      <li class="event-item">
+        <span class="status-dot status-dot--{{ entry.tone }}"></span>
+        <div class="event-item__body">
+          <strong>{{ entry.message }}</strong>
+          <span>{{ tr(entry.created_at) }}</span>
+        </div>
+      </li>
+      {% else %}
+      <li class="empty-state">{{ t("empty.logs") }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("dashboard.interfaces") }}</h2>
+        <p>{{ t("field.interfaces") }}</p>
+      </div>
+    </div>
+    <ul class="status-list">
+      {% for interface in summary.interfaces %}
+      <li>
+        <div class="status-list__main">
+          <span class="status-dot status-dot--{{ 'success' if interface.status == 'running' else 'info' if interface.status == 'stopped' else 'warning' }}"></span>
+          <div>
+            <strong>{{ interface.name }}</strong>
+            <span>{{ interface.type }} · {{ interface.metrics.rx_packets }} / {{ interface.metrics.tx_packets }}</span>
+          </div>
+        </div>
+        <span class="status-chip">{{ tv(interface.status) }}</span>
+      </li>
+      {% else %}
+      <li class="empty-state">{{ t("empty.interfaces") }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("dashboard.system_info") }}</h2>
+        <p>{{ t("nav.system") }}</p>
+      </div>
+    </div>
+    <dl class="system-grid">
+      <dt>{{ t("field.hearth_version") }}</dt>
+      <dd>{{ system_info.hearth_version }}</dd>
+      <dt>{{ t("field.reticulum_version") }}</dt>
+      <dd>{{ system_info.reticulum_version }}</dd>
+      <dt>{{ t("field.cpu") }}</dt>
+      <dd>{{ system_info.cpu }}{% if system_info.cpu_load %} · load {{ system_info.cpu_load }}{% endif %}</dd>
+      <dt>{{ t("field.memory") }}</dt>
+      <dd>{{ system_info.memory or '-' }}</dd>
+      <dt>{{ t("field.disk") }}</dt>
+      <dd>{{ system_info.disk_used }} / {{ system_info.disk_total }}</dd>
+    </dl>
+  </section>
+</section>
+
+<section class="dashboard-grid dashboard-grid--secondary">
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("dashboard.peers") }}</h2>
+        <p>{{ t("peers.title") }}</p>
+      </div>
+    </div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.peer") }}</th>
+          <th>{{ t("field.interface") }}</th>
+          <th>{{ t("field.hops") }}</th>
+          <th>{{ t("field.last_seen") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for peer in summary.recent_peers %}
+        <tr>
+          <td>{{ peer.display_name or peer.peer_hash }}</td>
+          <td>{{ peer.interface_name or '-' }}</td>
+          <td>{{ peer.hops or '-' }}</td>
+          <td>{{ tr(peer.last_seen_at) }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4">{{ t("empty.peers") }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("dashboard.announces") }}</h2>
+        <p>{{ t("announces.title") }}</p>
+      </div>
+    </div>
+    <table class="data-table compact-table">
+      <thead>
+        <tr>
+          <th>{{ t("field.source") }}</th>
+          <th>{{ t("field.interface") }}</th>
+          <th>{{ t("field.received") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for announce in summary.recent_announces %}
+        <tr>
+          <td>{{ announce.source_hash }}</td>
+          <td>{{ announce.via_interface or '-' }}</td>
+          <td>{{ tr(announce.received_at) }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="3">{{ t("empty.announces") }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</section>
+{% endblock %}

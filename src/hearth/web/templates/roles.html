@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.roles") }}</p>
+    <h1>{{ t("page.roles") }}</h1>
+    <p class="page-subtitle">{{ page_total }} roles · built-in and custom RBAC definitions</p>
+  </div>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>Create Role</h2>
+        <p>Custom roles are stored in the Hearth config and immediately become available to users and tokens.</p>
+      </div>
+    </div>
+    <form method="post" action="{{ request.url.path }}">
+      <input type="hidden" name="action" value="create_role">
+      <label class="toolbar-field stacked-field"><span>{{ t("field.name") }}</span><input type="text" name="name" placeholder="field_ops" required></label>
+      <label class="toolbar-field stacked-field"><span>{{ t("field.label") if t("field.label") != "field.label" else "Label" }}</span><input type="text" name="label" placeholder="Field Ops"></label>
+      <label class="toolbar-field stacked-field"><span>{{ t("field.summary") }}</span><input type="text" name="description" placeholder="Operate interfaces and maintenance windows"></label>
+      <label class="toolbar-field stacked-field"><span>Permissions</span><input type="text" name="permissions" placeholder="read,operate,maintenance"></label>
+      <p class="muted">Available permissions: {{ permission_options | join(', ') }}</p>
+      <div class="toolbar compact-toolbar">
+        <button type="submit">Create Role</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>Custom Roles</h2>
+        <p>Edit custom roles in place. Built-in roles remain visible below but are not editable here.</p>
+      </div>
+    </div>
+    {% for role in editable_roles %}
+    <form method="post" action="{{ request.url.path }}" class="panel panel--nested">
+      <input type="hidden" name="role_name" value="{{ role.name }}">
+      <input type="hidden" name="action" value="update_role">
+      <label class="toolbar-field stacked-field"><span>{{ t("field.name") }}</span><input type="text" value="{{ role.name }}" disabled></label>
+      <label class="toolbar-field stacked-field"><span>{{ t("field.label") if t("field.label") != "field.label" else "Label" }}</span><input type="text" name="label" value="{{ role.label }}"></label>
+      <label class="toolbar-field stacked-field"><span>{{ t("field.summary") }}</span><input type="text" name="description" value="{{ role.description }}"></label>
+      <label class="toolbar-field stacked-field"><span>Permissions</span><input type="text" name="permissions" value="{{ role.permissions | join(',') }}"></label>
+      <div class="toolbar compact-toolbar">
+        <button type="submit">Save Role</button>
+        <button type="submit" name="action" value="delete_role">Delete Role</button>
+      </div>
+    </form>
+    {% else %}
+    <p class="empty-state">No custom roles yet.</p>
+    {% endfor %}
+  </section>
+</section>
+
+<section class="panel table-panel">
+  <div class="panel-header">
+    <div>
+      <h2>Role Matrix</h2>
+      <p>Use this table to review built-in and custom permission coverage.</p>
+    </div>
+  </div>
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.role") }}</th>
+        <th>Kind</th>
+        <th>{{ t("field.summary") }}</th>
+        {% for permission in permission_columns %}
+        <th>{{ permission }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for role in roles %}
+      <tr>
+        <td><strong>{{ role.label }}</strong><div class="muted">{{ role.name }}</div></td>
+        <td>{{ 'Built-in' if role.builtin else 'Custom' }}</td>
+        <td>{{ role.description or '-' }}</td>
+        {% for permission in permission_columns %}
+        <td>{{ 'Yes' if permission in role.permissions else '-' }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if result %}
+<section class="panel">
+  <div class="panel-header"><div><h2>Result</h2></div></div>
+  <pre>{{ result | tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+{% endblock %}

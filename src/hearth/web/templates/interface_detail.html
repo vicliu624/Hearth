@@ -1,0 +1,154 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.interfaces") }}</p>
+    <h1>{{ interface.name }}</h1>
+    <p class="page-subtitle">{{ interface.type }} · {{ tv(interface.status) }} · {{ tv(interface.health_status) }}</p>
+  </div>
+  <div class="hero-meta-pill"><a class="inline-link" href="{{ interfaces_href }}">{{ t("interfaces.back_to_list") }}</a></div>
+</section>
+
+<section class="metric-grid metric-grid--4">
+  <article class="metric-card metric-card--{{ interface.tone }}">
+    <p class="metric-card__eyebrow">{{ t("field.status") }}</p>
+    <h2>{{ tv(interface.status) }}</h2>
+    <p class="metric-card__subtext">{{ tv(interface.health_status) }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">RX / TX</p>
+    <h2>{{ interface.rx_tx }}</h2>
+    <p class="metric-card__subtext">{{ t("field.rx_tx") }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("dashboard.activity_rate") }}</p>
+    <h2>{{ traffic_snapshot.rx_packets }}</h2>
+    <p class="metric-card__subtext">{{ t("dashboard.traffic") }} · {{ traffic_snapshot.tx_packets }}</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-card__eyebrow">{{ t("dashboard.errors") }}</p>
+    <h2>{{ traffic_snapshot.error_count }}</h2>
+    <p class="metric-card__subtext">{{ tr(interface.last_seen_at) }}</p>
+  </article>
+</section>
+
+<section class="panel">
+  <div class="panel-header panel-header--split">
+    <div>
+      <h2>{{ t("interfaces.detail_title") }}</h2>
+      <p>{{ t("section.actions") }}</p>
+    </div>
+  </div>
+  <form class="toolbar compact-toolbar" method="post" action="{{ control_href }}">
+    <input type="hidden" name="selected" value="{{ interface.name }}">
+    <input type="hidden" name="view" value="detail">
+    <button type="submit" name="action" value="start">{{ t("action.start") }}</button>
+    <button type="submit" name="action" value="stop">{{ t("action.stop") }}</button>
+    <button type="submit" name="action" value="restart">{{ t("action.restart") }}</button>
+  </form>
+</section>
+
+<section class="dashboard-grid dashboard-grid--hero">
+  <section class="panel panel--wide">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("interfaces.recent_traffic") }}</h2>
+        <p>{{ t("dashboard.traffic_last_24h") }}</p>
+      </div>
+    </div>
+    <div class="metric-ribbon">
+      <article>
+        <span>{{ t("dashboard.activity_rate") }}</span>
+        <strong>{{ traffic_snapshot.rx_packets }}</strong>
+      </article>
+      <article>
+        <span>{{ t("dashboard.traffic") }}</span>
+        <strong>{{ traffic_snapshot.tx_packets }}</strong>
+      </article>
+      <article>
+        <span>{{ t("dashboard.errors") }}</span>
+        <strong>{{ traffic_snapshot.error_count }}</strong>
+      </article>
+    </div>
+    {% if activity_bars %}
+    <div class="traffic-chart">
+      {% for point in activity_bars %}
+      <div class="traffic-slot" title="{{ point.title }} · RX {{ point.rx_value }} · TX {{ point.tx_value }}">
+        <span class="traffic-bar traffic-bar--rx" style="height: {{ point.rx_height }}%"></span>
+        <span class="traffic-bar traffic-bar--tx" style="height: {{ point.tx_height }}%"></span>
+        <span class="traffic-label">{{ point.label }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">{{ t("empty.interfaces") }}</div>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("section.metrics") }}</h2>
+        <p>{{ interface.name }}</p>
+      </div>
+    </div>
+    <dl class="system-grid">
+      <dt>{{ t("field.name") }}</dt>
+      <dd>{{ interface.name }}</dd>
+      <dt>{{ t("field.type") }}</dt>
+      <dd>{{ interface.type }}</dd>
+      <dt>{{ t("field.status") }}</dt>
+      <dd>{{ tv(interface.status) }}</dd>
+      <dt>{{ t("field.health") }}</dt>
+      <dd>{{ tv(interface.health_status) }}</dd>
+      <dt>{{ t("field.last_seen") }}</dt>
+      <dd>{{ tr(interface.last_seen_at) }}</dd>
+      {% for item in metric_rows %}
+      <dt>{{ item.label }}</dt>
+      <dd>{{ item.value }}</dd>
+      {% endfor %}
+    </dl>
+  </section>
+</section>
+
+<section class="panel table-panel">
+  <div class="panel-header">
+    <div>
+      <h2>{{ t("interfaces.recent_restarts") }}</h2>
+      <p>{{ t("field.restarts") }}</p>
+    </div>
+  </div>
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("field.reason") }}</th>
+        <th>{{ t("field.time") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in restart_history %}
+      <tr>
+        <td>{{ row.reason }}</td>
+        <td>{{ tr(row.created_at) }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="2">{{ t("health.no_restarts") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if result %}
+<section class="panel">
+  <div class="panel-header">
+    <div>
+      <h2>{{ t("config.operation_result") }}</h2>
+    </div>
+  </div>
+  <pre>{{ result | tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+{% endblock %}

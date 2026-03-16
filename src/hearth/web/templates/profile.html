@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.profile") }}</p>
+    <h1>{{ t("page.profile") }}</h1>
+    <p class="page-subtitle">{{ summary.node_name }} - {{ tv(session_status) }}</p>
+  </div>
+  <div class="hero-meta-pill">{{ t("field.auth_mode") }} - {{ tv(auth_mode_value) }}</div>
+</section>
+
+<section class="metric-grid metric-grid--4">
+  <article class="metric-card metric-card--{{ 'success' if session_status == 'authenticated' else 'warning' }}">
+    <div>
+      <p class="metric-card__eyebrow">{{ t("field.session") }}</p>
+      <h2>{{ tv(session_status) }}</h2>
+      <p class="metric-card__subtext">{{ t("field.token") }} - {{ token_masked }}</p>
+    </div>
+  </article>
+  <article class="metric-card">
+    <div>
+      <p class="metric-card__eyebrow">{{ t("field.role") }}</p>
+      <h2>{{ tv(role_value) }}</h2>
+      <p class="metric-card__subtext">{{ t("field.user") }} - {{ session_subject }}</p>
+    </div>
+  </article>
+  <article class="metric-card">
+    <div>
+      <p class="metric-card__eyebrow">{{ t("field.client_zone") }}</p>
+      <h2>{{ tv(client_zone) }}</h2>
+      <p class="metric-card__subtext">{{ client_host }}</p>
+    </div>
+  </article>
+  <article class="metric-card">
+    <div>
+      <p class="metric-card__eyebrow">{{ t("field.access") }}</p>
+      <h2>{{ tv(access_scope) }}</h2>
+      <p class="metric-card__subtext">{{ t("nav.security") }}</p>
+    </div>
+  </article>
+</section>
+
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("profile.identity") }}</h2>
+      </div>
+    </div>
+    <dl class="system-grid">
+      <dt>{{ t("field.user") }}</dt>
+      <dd>{{ session_subject }}</dd>
+      <dt>{{ t("field.role") }}</dt>
+      <dd>{{ tv(role_value) }}</dd>
+      <dt>{{ t("field.session") }}</dt>
+      <dd>{{ tv(session_status) }}</dd>
+      <dt>{{ t("field.auth_mode") }}</dt>
+      <dd>{{ tv(auth_mode_value) }}</dd>
+      <dt>{{ t("field.token") }}</dt>
+      <dd>{{ token_masked }}</dd>
+      <dt>{{ t("field.client") }}</dt>
+      <dd>{{ client_host }}</dd>
+      <dt>{{ t("field.client_zone") }}</dt>
+      <dd>{{ tv(client_zone) }}</dd>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("profile.security_posture") }}</h2>
+      </div>
+    </div>
+    <ul class="event-list">
+      {% for finding in security_findings %}
+      <li class="event-item">
+        <span class="status-dot status-dot--warning"></span>
+        <div class="event-item__body">
+          <strong>{{ t(finding) }}</strong>
+        </div>
+      </li>
+      {% else %}
+      <li class="empty-state">{{ t("security.no_findings") }}</li>
+      {% endfor %}
+    </ul>
+    <div class="panel-header">
+      <div>
+        <h2>{{ t("profile.quick_links") }}</h2>
+      </div>
+    </div>
+    <div class="toolbar toolbar-group">
+      {% for item in quick_links %}
+      <a class="button-link" href="{{ item.href }}">{{ t(item.label_key) }}</a>
+      {% endfor %}
+    </div>
+  </section>
+</section>
+{% endblock %}

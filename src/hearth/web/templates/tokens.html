@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero">
+  <div>
+    <p class="page-kicker">{{ t("nav.tokens") }}</p>
+    <h1>{{ t("page.tokens") }}</h1>
+    <p class="page-subtitle">{{ page_total }} {{ t("tokens.total") }}</p>
+  </div>
+</section>
+
+{% if result and result.token and result.token.token %}
+<section class="flash flash-success">
+  <strong>{{ t("tokens.copy_now") }}</strong><br>
+  <code>{{ result.token.token }}</code>
+</section>
+{% endif %}
+
+<section class="panel toolbar-panel compact-toolbar">
+  <form method="post" action="{{ request.url.path }}" class="toolbar toolbar--between">
+    <div class="toolbar-group">
+      <input type="hidden" name="action" value="create_token">
+      <label class="toolbar-field">
+        <span>{{ t("tokens.name") }}</span>
+        <input type="text" name="token_name" required>
+      </label>
+      <label class="toolbar-field toolbar-field--small">
+        <span>{{ t("field.user") }}</span>
+        <select name="owner_username">
+          <option value="">-</option>
+          {% for user in users %}
+          <option value="{{ user.username }}">{{ user.username }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="toolbar-field toolbar-field--small">
+        <span>{{ t("field.role") }}</span>
+        <select name="role">
+          {% for role in role_options %}
+          <option value="{{ role.name }}">{{ role.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="toolbar-field">
+        <span>{{ t("tokens.scopes") }}</span>
+        <input type="text" name="scopes" placeholder="read,operate,maintenance">
+      </label>
+      <label class="toolbar-field toolbar-field--small">
+        <span>{{ t("tokens.expires_days") }}</span>
+        <input type="number" name="expires_days" min="0" max="365" value="0">
+      </label>
+    </div>
+    <div class="toolbar-group">
+      <button type="submit">{{ t("tokens.create") }}</button>
+    </div>
+  </form>
+</section>
+
+<section class="panel table-panel">
+  <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>{{ t("tokens.name") }}</th>
+        <th>{{ t("field.user") }}</th>
+        <th>{{ t("field.role") }}</th>
+        <th>{{ t("field.status") }}</th>
+        <th>{{ t("field.expires") }}</th>
+        <th>{{ t("field.time") }}</th>
+        <th>{{ t("tokens.actions") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for token in tokens %}
+      <tr>
+        <td>
+          <strong>{{ token.token_name }}</strong>
+          <div class="muted">{{ token.token_hint }}</div>
+        </td>
+        <td>{{ token.owner_username or '-' }}</td>
+        <td>{{ tv(token.role) }}</td>
+        <td><span class="status-chip status-chip--{{ 'success' if token.enabled else 'warning' }}">{{ tv('enabled' if token.enabled else 'disabled') }}</span></td>
+        <td>{{ token.expires_at or '-' }}</td>
+        <td>{{ tr(token.last_used_at) if token.last_used_at else '-' }}</td>
+        <td>
+          {% if token.builtin %}
+          <span class="muted">{{ t("tokens.builtin") }}</span>
+          {% else %}
+          <form method="post" action="{{ request.url.path }}" class="inline-form">
+            <input type="hidden" name="token_name" value="{{ token.token_name }}">
+            <button type="submit" name="action" value="{{ 'disable_token' if token.enabled else 'enable_token' }}">{{ t('tokens.disable' if token.enabled else 'tokens.enable') }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
