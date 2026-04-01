@@ -126,7 +126,9 @@ trap on_error ERR
 require_no_spaces() {
     local path_value="$1"
     local label="$2"
-    [[ "$path_value" == *" "* ]] && die "$label does not support spaces: $path_value"
+    if [[ "$path_value" == *" "* ]]; then
+        die "$label does not support spaces: $path_value"
+    fi
 }
 
 require_absolute_path() {
