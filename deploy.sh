@@ -49,6 +49,7 @@ VENV_PYTHON=""
 VENV_HEARTH=""
 SERVICE_FILE=""
 RESOLVED_BACKEND=""
+USE_SYSTEM_PYTHON_RUNTIME_DEPS=false
 SUDO=()
 STOPPED_RUNNING_SERVICE=false
 
@@ -194,7 +195,9 @@ validate_managed_install_dir() {
 
 run_root() {
     if [[ ${#SUDO[@]} -gt 0 ]]; then
-        "${SUDO[@]}" "$@"
+        "${SUDO[@]}" \
+            --preserve-env=PIP_INDEX_URL,PIP_EXTRA_INDEX_URL,PIP_DEFAULT_TIMEOUT,PIP_RETRIES,PIP_TRUSTED_HOST,PIP_DISABLE_PIP_VERSION_CHECK \
+            "$@"
     else
         "$@"
     fi
@@ -397,8 +400,12 @@ install_system_packages() {
     log_info "Installing system dependencies if the package manager supports it"
 
     if command_exists apt-get; then
+        USE_SYSTEM_PYTHON_RUNTIME_DEPS=true
         run_root apt-get update
-        run_root apt-get install -y python3 python3-venv python3-pip git rsync curl ca-certificates
+        run_root apt-get install -y \
+            python3 python3-venv python3-pip git rsync curl ca-certificates \
+            python3-fastapi python3-jinja2 python3-pydantic python3-sqlalchemy \
+            python3-sqlalchemy-ext python3-greenlet python3-tomli-w python3-typer python3-uvicorn
     elif command_exists dnf; then
         run_root dnf install -y python3 python3-pip git rsync curl ca-certificates
     elif command_exists yum; then
@@ -410,6 +417,13 @@ install_system_packages() {
     else
         log_warn "No supported package manager detected. Please ensure Python 3.12+, venv, git, and rsync or tar are installed."
     fi
+}
+
+venv_uses_system_site_packages() {
+    local cfg_file="$VENV_DIR/pyvenv.cfg"
+
+    [[ -f "$cfg_file" ]] || return 1
+    grep -Eiq '^include-system-site-packages *= *true$' "$cfg_file"
 }
 
 select_python() {
@@ -565,8 +579,17 @@ prepare_directories() {
 ensure_virtualenv() {
     log_info "Preparing Python virtual environment"
 
+    if [[ "$USE_SYSTEM_PYTHON_RUNTIME_DEPS" == true && -x "$VENV_PYTHON" ]] && ! venv_uses_system_site_packages; then
+        log_warn "Recreating virtual environment so it can reuse system Python packages"
+        run_root rm -rf "$VENV_DIR"
+    fi
+
     if [[ ! -x "$VENV_PYTHON" ]]; then
-        run_root "$PYTHON_BIN" -m venv "$VENV_DIR"
+        if [[ "$USE_SYSTEM_PYTHON_RUNTIME_DEPS" == true ]]; then
+            run_root "$PYTHON_BIN" -m venv --system-site-packages "$VENV_DIR"
+        else
+            run_root "$PYTHON_BIN" -m venv "$VENV_DIR"
+        fi
         log_success "Created virtual environment at $VENV_DIR"
     else
         log_info "Reusing existing virtual environment at $VENV_DIR"
@@ -576,7 +599,11 @@ ensure_virtualenv() {
 install_hearth() {
     log_info "Installing Hearth into the virtual environment"
     run_with_retry 3 5 run_root "$VENV_PYTHON" -m pip install --upgrade pip setuptools wheel hatchling
-    run_with_retry 3 5 run_root "$VENV_PYTHON" -m pip install --no-build-isolation --upgrade "$INSTALL_DIR"
+    if [[ "$USE_SYSTEM_PYTHON_RUNTIME_DEPS" == true ]]; then
+        run_with_retry 3 5 run_root "$VENV_PYTHON" -m pip install --no-build-isolation --no-deps --upgrade "$INSTALL_DIR"
+    else
+        run_with_retry 3 5 run_root "$VENV_PYTHON" -m pip install --no-build-isolation --upgrade "$INSTALL_DIR"
+    fi
     log_success "Hearth Python package installed"
 }
 
@@ -799,6 +826,16 @@ PY
     log_success "Preflight checks passed"
 }
 
+restore_service_ownership() {
+    if [[ "$DEV_MODE" == true ]]; then
+        return
+    fi
+
+    log_info "Restoring ownership for runtime paths"
+    run_root chown -R "$SERVICE_USER:$SERVICE_GROUP" "$CONFIG_DIR" "$DATA_DIR"
+    log_success "Runtime paths are owned by $SERVICE_USER:$SERVICE_GROUP"
+}
+
 write_systemd_service() {
     local temp_service=""
 
@@ -965,6 +1002,7 @@ main() {
     validate_effective_backend
     verify_hearth_cli
     run_preflight_check
+    restore_service_ownership
     write_systemd_service
     manage_service
     print_summary
