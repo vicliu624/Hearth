@@ -1,268 +1,176 @@
 # Hearth Deployment Guide
 
-This guide explains how to deploy Hearth to a remote Linux server using the provided deployment script.
+This guide describes the supported Linux deployment flow for this repository.
 
-## Quick Start (Recommended)
+## Quick Start
 
-### On the Remote Server (192.168.31.99)
+On a Linux host:
 
 ```bash
-# Clone the repository
 git clone https://github.com/vicliu624/Hearth.git
 cd Hearth
-
-# Run the deployment script
 bash deploy.sh
 ```
 
 The script will:
-1. Check system requirements
-2. Create service user `hearth`
-3. Install system dependencies
-4. Set up Python virtual environment
-5. Install Python packages
-6. Create configuration files
-7. Install systemd service
 
-### Verify Deployment
+- install system dependencies when it can detect a supported package manager
+- copy the cloned repository into the managed install directory
+- create a Python virtual environment and install Hearth
+- generate `/etc/hearth/hearth.toml` if it does not already exist
+- create and start a `systemd` service when `systemd` is available
+
+## Default Layout
+
+By default, `deploy.sh` uses:
+
+- install directory: `/opt/hearth`
+- config directory: `/etc/hearth`
+- data directory: `/var/lib/hearth`
+- service name: `hearth`
+- web address: `http://<server-ip>:8480/login`
+
+The generated config uses absolute paths so the service does not depend on where the repository was cloned.
+
+## Backend Selection
+
+The deployment script defaults to:
+
+```text
+--backend auto
+```
+
+That means:
+
+- if `rnsd` or `RNS.Utilities.rnsd` is available, the config uses `managed_rnsd`
+- otherwise the config falls back to `mock_process`
+
+This makes the Web console come up reliably even on hosts that do not yet have Reticulum installed.
+
+If you want to force a real Reticulum runtime, install Reticulum first and then run:
 
 ```bash
-# Check service status
-sudo systemctl status hearth
-
-# View logs
-sudo journalctl -u hearth -f
-
-# Test the API
-curl -H "X-Hearth-Token: change-me-secure-token-12345" http://localhost:8480/api/node/status
+bash deploy.sh --overwrite-config --backend managed_rnsd
 ```
 
-## Access Hearth
+If you only want the control plane UI to come up, this is enough:
 
-Open your browser and visit:
-```
-http://192.168.31.99:8480/login
-```
-
-Login with the admin token from `/etc/hearth/hearth.toml`:
-```
-change-me-secure-token-12345
-```
-
-## Deployment Script Options
-
-### Standard Deployment (Production)
 ```bash
-bash deploy.sh
+bash deploy.sh --backend mock_process
 ```
 
-### Development Mode (No sudo required)
+## Useful Options
+
 ```bash
+# Rewrite an existing config file
+bash deploy.sh --overwrite-config
+
+# Set a custom admin token instead of generating one
+bash deploy.sh --admin-token your-token-here
+
+# Skip auto-start after installation
+bash deploy.sh --no-start
+
+# Skip enable on boot
+bash deploy.sh --no-enable
+
+# In-place local install without systemd
 bash deploy.sh --dev
 ```
 
-### Configuration Only
-```bash
-bash deploy.sh --config-only
-```
+Run `bash deploy.sh --help` for the complete option list.
 
-### Without sudo (Container environments)
-```bash
-bash deploy.sh --no-sudo
-```
+## Verify Deployment
 
-## Configuration
-
-The main configuration file is located at `/etc/hearth/hearth.toml`
-
-Key settings:
-- **web.host**: Bind address (default: 0.0.0.0)
-- **web.port**: Bind port (default: 8480)
-- **security.admin_token**: Admin authentication token
-- **reticulum.backend**: Runtime backend (managed_rnsd, external_process, mock_process)
-
-### Change Admin Token
+On a `systemd` host:
 
 ```bash
-# Edit configuration
-sudo nano /etc/hearth/hearth.toml
-
-# Update the admin_token field
-[security]
-admin_token = "your-new-secure-token-here"
-
-# Restart service
-sudo systemctl restart hearth
-```
-
-## Managing Hearth Service
-
-### Start the service
-```bash
-sudo systemctl start hearth
-```
-
-### Stop the service
-```bash
-sudo systemctl stop hearth
-```
-
-### Restart the service
-```bash
-sudo systemctl restart hearth
-```
-
-### Enable auto-start on boot
-```bash
-sudo systemctl enable hearth
-```
-
-### Disable auto-start
-```bash
-sudo systemctl disable hearth
-```
-
-### View service logs
-```bash
-# Last 100 lines
-sudo journalctl -u hearth -n 100
-
-# Follow logs in real-time
+sudo systemctl status hearth
 sudo journalctl -u hearth -f
-
-# Last 1 hour
-sudo journalctl -u hearth --since "1 hour ago"
 ```
 
-## Directory Structure
+To inspect the active config:
 
-After deployment:
-```
-/opt/hearth/                    # Application directory
-  ├── venv/                     # Python virtual environment
-  ├── src/                      # Source code
-  ├── data/                     # Runtime data
-  │   ├── identity              # Reticulum identity
-  │   └── runtime/              # State and metrics
-  └── reticulum-config/         # Reticulum configuration
-
-/etc/hearth/                    # Configuration directory
-  └── hearth.toml               # Main configuration file
-
-/var/log/journalctl             # Systemd journal (logs visible via journalctl)
+```bash
+sudo cat /etc/hearth/hearth.toml
 ```
 
-## Remote Deployment from Windows
+The script prints the generated admin token once at the end of deployment. If you preserved an existing config, use the token already stored in `/etc/hearth/hearth.toml`.
 
-### SSH into the server and run deployment
+## Important Paths
 
-```powershell
-# PowerShell on Windows
-$RemoteUser = "vicliu"
-$RemoteHost = "192.168.31.99"
-$RemotePassword = "your-password"
+After a default deployment:
 
-# Set SSH password
-$env:SSHPASS = $RemotePassword
-
-# SSH and clone + deploy
-sshpass -e ssh -o StrictHostKeyChecking=no "$RemoteUser@$RemoteHost" @"
-git clone https://github.com/vicliu624/Hearth.git /tmp/hearth-deploy
-cd /tmp/hearth-deploy
-bash deploy.sh
-"@
+```text
+/opt/hearth/              application checkout and virtual environment
+/opt/hearth/.venv/        Python virtual environment
+/etc/hearth/hearth.toml   Hearth config
+/var/lib/hearth/          runtime data, database, generated runtime files
 ```
 
-## Monitoring via Fleet
+## Manual Start Without systemd
 
-If you want to monitor multiple Hearth nodes, see [`docs/deployment.md`](docs/deployment.md) for fleet management.
+If the target host does not use `systemd`, the script still installs Hearth but skips service setup.
+
+Start it manually with:
+
+```bash
+HEARTH_CONFIG=/etc/hearth/hearth.toml /opt/hearth/.venv/bin/hearth-api
+```
+
+For local development-style installs:
+
+```bash
+bash deploy.sh --dev
+HEARTH_CONFIG=./hearth.toml ./.venv/bin/hearth-api
+```
 
 ## Troubleshooting
 
-### Service won't start
+### Python version is too old
+
+Hearth requires Python `3.12+`.
+
+Install Python `3.12+` first, or pass an explicit interpreter:
+
 ```bash
-# Check service status
+bash deploy.sh --python /usr/bin/python3.12
+```
+
+### The service does not start
+
+Inspect the service and logs:
+
+```bash
 sudo systemctl status hearth
-
-# View error logs
-sudo journalctl -u hearth -n 50 --no-pager
+sudo journalctl -u hearth -n 100 --no-pager
 ```
 
-### Port 8480 already in use
-```bash
-# Find what's using the port
-sudo lsof -i :8480
+### `managed_rnsd` is configured but `rnsd` is missing
 
-# Choose a different port in hearth.toml
-[web]
-port = 8481
-```
-
-### Can't connect to reticulum
-Check if `rnsd` is installed:
-```bash
-which rnsd
-rnsd --version
-
-# Or check configuration
-cat /etc/hearth/hearth.toml | grep backend
-```
-
-### Permission denied errors
-Ensure the hearth user has proper permissions:
-```bash
-sudo chown -R hearth:hearth /opt/hearth /etc/hearth
-sudo chmod 640 /etc/hearth/hearth.toml
-```
-
-## Security Recommendations
-
-1. **Change admin token immediately**
-   ```bash
-   sudo nano /etc/hearth/hearth.toml
-   # Update security.admin_token
-   ```
-
-2. **Configure firewall rules**
-   ```bash
-   # Only allow local network access
-   sudo ufw allow from 192.168.31.0/24 to any port 8480
-   ```
-
-3. **Use HTTPS in production**
-   - Configure a reverse proxy (nginx, caddy)
-   - Use Let's Encrypt certificates
-
-4. **Restrict WAN access**
-   ```toml
-   [security]
-   allow_wan = false  # Keep disabled for local networks
-   allow_lan = true
-   ```
-
-## Uninstall
-
-To remove Hearth:
+Either install Reticulum, or switch back to the safe default:
 
 ```bash
-# Stop service
-sudo systemctl stop hearth
-sudo systemctl disable hearth
-
-# Remove systemd service
-sudo rm /etc/systemd/system/hearth.service
-sudo systemctl daemon-reload
-
-# Remove installation
-sudo rm -rf /opt/hearth /etc/hearth
-
-# Remove service user
-sudo userdel hearth
+bash deploy.sh --overwrite-config --backend mock_process
 ```
 
-## Support
+### Port `8480` is already in use
 
-For issues and questions, see:
-- [API Reference](docs/api-reference.md)
-- [Configuration Reference](docs/config-reference.md)
-- [Network Model](docs/network-model.md)
+Deploy on a different port:
+
+```bash
+bash deploy.sh --overwrite-config --port 8481
+```
+
+### You want to keep the existing config
+
+Just re-run the script without `--overwrite-config`.
+
+It will reuse `/etc/hearth/hearth.toml` and only refresh the application install.
+
+## Security Notes
+
+- change the admin token if you used a temporary one
+- keep `allow_wan = false` unless you intentionally want remote access
+- put a reverse proxy in front of Hearth before exposing it to the public Internet
+
