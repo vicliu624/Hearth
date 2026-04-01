@@ -200,6 +200,27 @@ run_root() {
     fi
 }
 
+run_with_retry() {
+    local attempts="$1"
+    local delay_seconds="$2"
+    shift 2
+
+    local attempt=1
+    while true; do
+        if "$@"; then
+            return 0
+        fi
+
+        if (( attempt >= attempts )); then
+            return 1
+        fi
+
+        log_warn "Command failed on attempt ${attempt}/${attempts}; retrying in ${delay_seconds}s"
+        sleep "$delay_seconds"
+        attempt=$((attempt + 1))
+    done
+}
+
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -554,8 +575,8 @@ ensure_virtualenv() {
 
 install_hearth() {
     log_info "Installing Hearth into the virtual environment"
-    run_root "$VENV_PYTHON" -m pip install --upgrade pip setuptools wheel
-    run_root "$VENV_PYTHON" -m pip install --upgrade -e "$INSTALL_DIR"
+    run_with_retry 3 5 run_root "$VENV_PYTHON" -m pip install --upgrade pip setuptools wheel hatchling
+    run_with_retry 3 5 run_root "$VENV_PYTHON" -m pip install --no-build-isolation --upgrade "$INSTALL_DIR"
     log_success "Hearth Python package installed"
 }
 
