@@ -59,11 +59,49 @@ If you only want the control plane UI to come up, this is enough:
 bash deploy.sh --backend mock_process
 ```
 
+## Adopt an Existing Reticulum/LXMF Node
+
+If the host already runs Reticulum as a real user account and you want Hearth to take over that node cleanly, use:
+
+```bash
+bash deploy.sh --adopt-existing-reticulum vicliu
+```
+
+This cutover mode automatically:
+
+- runs `hearth.service` as the existing node user instead of the default `hearth` system user
+- imports `~/.reticulum/config` into `/etc/hearth/hearth.toml`
+- points Hearth at the existing `~/.reticulum` directory and `~/.local/reticulum-venv/bin/rnsd` when present
+- rewrites the generated `systemd` unit so the managed Reticulum config inside the user home remains writable
+- adds an `lxmd.service` drop-in so LXMF follows `hearth.service`
+- masks the old standalone `rnsd.service`
+- installs friendly aliases so `systemctl status reticulum lxmf` matches the real runtime layout
+- backs up the previous `/etc/hearth/hearth.toml` before overwriting it
+
+If you need the pieces separately, the same behavior can be assembled with:
+
+```bash
+bash deploy.sh \
+  --service-user vicliu \
+  --service-group vicliu \
+  --backend managed_rnsd \
+  --reticulum-config-dir /home/vicliu/.reticulum \
+  --reticulum-import-config /home/vicliu/.reticulum/config \
+  --reticulum-managed-command /home/vicliu/.local/reticulum-venv/bin/rnsd \
+  --integrate-lxmf \
+  --mask-legacy-rnsd \
+  --install-service-aliases \
+  --overwrite-config
+```
+
 ## Useful Options
 
 ```bash
 # Rewrite an existing config file
 bash deploy.sh --overwrite-config
+
+# One-shot cutover of an existing user-owned Reticulum node
+bash deploy.sh --adopt-existing-reticulum vicliu
 
 # Set a custom admin token instead of generating one
 bash deploy.sh --admin-token your-token-here
@@ -87,6 +125,13 @@ On a `systemd` host:
 ```bash
 sudo systemctl status hearth
 sudo journalctl -u hearth -f
+```
+
+If you used the cutover mode above, these aliases are more convenient:
+
+```bash
+sudo systemctl status reticulum lxmf
+sudo journalctl -u hearth -u lxmd -f
 ```
 
 To inspect the active config:
@@ -144,6 +189,13 @@ Inspect the service and logs:
 ```bash
 sudo systemctl status hearth
 sudo journalctl -u hearth -n 100 --no-pager
+```
+
+If the host was converted from a standalone Reticulum install, also inspect:
+
+```bash
+sudo systemctl status reticulum lxmf
+sudo journalctl -u hearth -u lxmd -n 100 --no-pager
 ```
 
 ### `managed_rnsd` is configured but `rnsd` is missing

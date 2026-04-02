@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import importlib.util
 import json
@@ -90,27 +90,57 @@ class ManagedReticulumAdapter(ReticulumAdapter):
     def __init__(self, settings: HearthSettings) -> None:
         self.settings = settings
         self._config_bridge = RuntimeConfigBridge(settings)
-        self._interfaces: list[InterfaceRuntimeInfo] = []
+        self._configured_interfaces: list[InterfaceRuntimeInfo] = []
+        self._observed_interfaces: list[InterfaceRuntimeInfo] = []
         self._paths: list[PathEntry] = []
         self._announces: list[AnnounceEvent] = []
+        self._observed_runtime: dict[str, Any] = {}
 
     def _stable_hash(self, value: str) -> str:
         return hashlib.sha1(value.encode("utf-8")).hexdigest()[:16]
 
-    def _rebuild_observations(self) -> None:
-        state = self._read_state()
-        runtime_status = self._state_to_runtime_status(state)
-        if not runtime_status.running:
-            self._paths = []
-            self._announces = []
-            return
+    def _parse_epoch(self, value: Any) -> datetime | None:
+        if value is None:
+            return None
+        try:
+            return datetime.fromtimestamp(float(value), tz=timezone.utc)
+        except (OSError, OverflowError, TypeError, ValueError):
+            return None
 
-        timestamp = runtime_status.last_heartbeat_at or runtime_status.started_at or utcnow()
+    def _normalize_interface_name(self, raw_name: Any, short_name: Any = None) -> str:
+        short = str(short_name or "").strip()
+        if short and "\x00" not in short:
+            return short
+
+        raw = str(raw_name or "").strip()
+        if "[" in raw and raw.endswith("]"):
+            label = raw.split("[", 1)[1][:-1].strip()
+            if label and raw.startswith(("TCPInterface[", "TCPClientInterface[", "TCPServerInterface[")) and "/" in label:
+                label = label.split("/", 1)[0].strip()
+            if label:
+                return label
+        return raw or "unknown"
+
+    def _normalize_interface_type(self, raw_type: Any) -> str:
+        normalized = str(raw_type or "").lower()
+        if "tcp" in normalized:
+            return "tcp"
+        if "rnode" in normalized:
+            return "rnode"
+        if "serial" in normalized:
+            return "serial"
+        if "autointerface" in normalized or "local" in normalized:
+            return "local"
+        return "custom"
+
+    def _build_synthetic_paths(
+        self,
+        interfaces: list[InterfaceRuntimeInfo],
+        timestamp: datetime,
+    ) -> tuple[list[PathEntry], list[AnnounceEvent]]:
         paths: list[PathEntry] = []
         announces: list[AnnounceEvent] = []
-
-        active_interfaces = [item for item in self._interfaces if item.enabled and item.status == "running"]
-        for index, interface in enumerate(active_interfaces, start=1):
+        for index, interface in enumerate(interfaces, start=1):
             destination_hash = self._stable_hash(f"{interface.name}:destination")
             peer_hash = self._stable_hash(f"{interface.name}:peer")
             display_name = f"{interface.name}-peer"
@@ -139,9 +169,178 @@ class ManagedReticulumAdapter(ReticulumAdapter):
                     },
                 )
             )
+        return paths, announces
 
-        self._paths = paths
-        self._announces = announces
+    def _resolve_reticulum_utility_command(self, executable_name: str, module_name: str) -> list[str] | None:
+        configured = str(self.settings.reticulum.managed_command or "").strip()
+        if configured:
+            base = self._expand_command(shlex.split(configured))
+            if len(base) >= 3 and base[1] == "-m" and base[2].startswith("RNS.Utilities."):
+                return [base[0], "-m", module_name]
+
+            executable = Path(base[0]).expanduser()
+            if executable.is_absolute():
+                sibling = executable.with_name(executable_name)
+                if sibling.exists():
+                    return [str(sibling)]
+
+        resolved = shutil.which(executable_name)
+        if resolved:
+            return [resolved]
+
+        if importlib.util.find_spec(module_name) is not None:
+            return [sys.executable, "-m", module_name]
+
+        return None
+
+    def _run_json_command(self, command: list[str] | None, extra_args: list[str]) -> Any | None:
+        if not command:
+            return None
+
+        try:
+            completed = subprocess.run(
+                [*command, *extra_args],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                text=True,
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+
+        if completed.returncode != 0:
+            return None
+
+        stdout = completed.stdout.strip()
+        if not stdout:
+            return None
+
+        try:
+            return json.loads(stdout)
+        except json.JSONDecodeError:
+            return None
+
+    def _load_real_observations(self) -> tuple[list[InterfaceRuntimeInfo], list[PathEntry], list[AnnounceEvent], dict[str, Any]] | None:
+        status_command = self._resolve_reticulum_utility_command("rnstatus", "RNS.Utilities.rnstatus")
+        path_command = self._resolve_reticulum_utility_command("rnpath", "RNS.Utilities.rnpath")
+        config_dir = str(self.settings.reticulum_config_path)
+
+        status_payload = self._run_json_command(status_command, ["--config", config_dir, "-j"])
+        path_payload = self._run_json_command(path_command, ["--config", config_dir, "-t", "-j"])
+
+        if status_payload is None and path_payload is None:
+            return None
+
+        observed_runtime = {
+            "observed_at": utcnow(),
+            "status_command": [*status_command, "--config", config_dir, "-j"] if status_command else None,
+            "path_command": [*path_command, "--config", config_dir, "-t", "-j"] if path_command else None,
+        }
+
+        interfaces: list[InterfaceRuntimeInfo] = []
+        seen_interface_names: set[str] = set()
+        if isinstance(status_payload, dict):
+            observed_runtime.update(
+                {
+                    "transport_id": status_payload.get("transport_id"),
+                    "network_id": status_payload.get("network_id"),
+                    "transport_uptime": status_payload.get("transport_uptime"),
+                    "rss": status_payload.get("rss"),
+                    "interface_count": len(status_payload.get("interfaces", [])),
+                }
+            )
+            for item in status_payload.get("interfaces", []):
+                if not isinstance(item, dict):
+                    continue
+                name = self._normalize_interface_name(item.get("name"), item.get("short_name"))
+                if name in seen_interface_names:
+                    continue
+                seen_interface_names.add(name)
+                running = bool(item.get("status"))
+                interfaces.append(
+                    InterfaceRuntimeInfo(
+                        name=name,
+                        type=self._normalize_interface_type(item.get("type")),
+                        enabled=True,
+                        status="running" if running else "stopped",
+                        health_status="healthy" if running else "warning",
+                        last_seen_at=observed_runtime["observed_at"] if running else None,
+                        metrics={
+                            "rx_packets": int(item.get("rxb", 0) or 0),
+                            "tx_packets": int(item.get("txb", 0) or 0),
+                            "error_count": 0,
+                            "rx_bps": int(item.get("rxs", 0) or 0),
+                            "tx_bps": int(item.get("txs", 0) or 0),
+                            "announce_queue": int(item.get("announce_queue", 0) or 0),
+                            "held_announces": int(item.get("held_announces", 0) or 0),
+                            "clients": int(item.get("clients", 0) or 0),
+                            "peers": int(item.get("peers", 0) or 0),
+                            "bitrate": int(item.get("bitrate", 0) or 0),
+                        },
+                        last_error=None if running else "reported as down by rnstatus",
+                    )
+                )
+
+        paths: list[PathEntry] = []
+        announces: list[AnnounceEvent] = []
+        if isinstance(path_payload, list):
+            for item in path_payload:
+                if not isinstance(item, dict):
+                    continue
+                destination_hash = str(item.get("hash") or "").strip()
+                if not destination_hash:
+                    continue
+                interface_name = self._normalize_interface_name(item.get("interface"))
+                timestamp = self._parse_epoch(item.get("timestamp"))
+                path_entry = PathEntry(
+                    destination_hash=destination_hash,
+                    via_interface=interface_name or None,
+                    next_hop=str(item.get("via") or "").strip() or None,
+                    hop_count=int(item.get("hops")) if item.get("hops") is not None else None,
+                    expires_at=self._parse_epoch(item.get("expires")),
+                    last_updated_at=timestamp,
+                )
+                paths.append(path_entry)
+                announces.append(
+                    AnnounceEvent(
+                        source_hash=destination_hash,
+                        via_interface=path_entry.via_interface,
+                        received_at=timestamp,
+                        hop_count=path_entry.hop_count,
+                        raw_summary=f"path observed for {destination_hash[:12]}",
+                        metadata={
+                            "display_name": destination_hash[:12],
+                            "source_type": "path",
+                            "interface_name": path_entry.via_interface,
+                            "destination_hash": destination_hash,
+                            "next_hop": path_entry.next_hop,
+                        },
+                    )
+                )
+
+        return interfaces, paths, announces, observed_runtime
+
+    def _rebuild_observations(self, state: RuntimeFileState) -> None:
+        self._observed_runtime = {}
+        runtime_status = self._state_to_runtime_status(state, allow_observed=False)
+        if not runtime_status.running:
+            self._observed_interfaces = []
+            self._paths = []
+            self._announces = []
+            return
+
+        if self.settings.reticulum.backend != "mock_process":
+            observed = self._load_real_observations()
+            if observed is not None:
+                self._observed_interfaces, self._paths, self._announces, self._observed_runtime = observed
+                if self._observed_interfaces or self._paths or self._announces:
+                    return
+
+        timestamp = runtime_status.last_heartbeat_at or runtime_status.started_at or utcnow()
+        self._observed_interfaces = list(self._configured_interfaces)
+        active_interfaces = [item for item in self._configured_interfaces if item.enabled and item.status == "running"]
+        self._paths, self._announces = self._build_synthetic_paths(active_interfaces, timestamp)
 
     def _read_state(self) -> RuntimeFileState:
         if not self.settings.runtime_state_path.exists():
@@ -198,7 +397,7 @@ class ManagedReticulumAdapter(ReticulumAdapter):
             return False
         return True
 
-    def _state_to_runtime_status(self, state: RuntimeFileState) -> NodeRuntimeStatus:
+    def _state_to_runtime_status(self, state: RuntimeFileState, *, allow_observed: bool = True) -> NodeRuntimeStatus:
         pid = state.pid if self._is_pid_running(state.pid) else None
         running = pid is not None
         started_at = parse_datetime(state.started_at)
@@ -206,6 +405,16 @@ class ManagedReticulumAdapter(ReticulumAdapter):
         uptime = 0
         if running and started_at:
             uptime = int((utcnow() - started_at).total_seconds())
+
+        if running and allow_observed and self._observed_runtime:
+            heartbeat_at = self._observed_runtime.get("observed_at") or heartbeat_at
+            observed_uptime = self._observed_runtime.get("transport_uptime")
+            if observed_uptime is not None:
+                try:
+                    uptime = max(int(float(observed_uptime)), 0)
+                    started_at = utcnow() - timedelta(seconds=uptime)
+                except (TypeError, ValueError):
+                    pass
 
         status = state.status
         if running:
@@ -235,6 +444,14 @@ class ManagedReticulumAdapter(ReticulumAdapter):
                 "stdout_path": str(self.settings.runtime_stdout_path),
                 "stderr_path": str(self.settings.runtime_stderr_path),
                 "last_error": state.last_error,
+                "transport_id": self._observed_runtime.get("transport_id") if allow_observed else None,
+                "network_id": self._observed_runtime.get("network_id") if allow_observed else None,
+                "rss": self._observed_runtime.get("rss") if allow_observed else None,
+                "interface_count": self._observed_runtime.get("interface_count") if allow_observed else None,
+                "observation_commands": {
+                    "rnstatus": self._observed_runtime.get("status_command") if allow_observed else None,
+                    "rnpath": self._observed_runtime.get("path_command") if allow_observed else None,
+                },
             },
         )
 
@@ -317,7 +534,7 @@ class ManagedReticulumAdapter(ReticulumAdapter):
             self._write_pid(None)
             self._write_state(state)
 
-        self._rebuild_observations()
+        await asyncio.to_thread(self._rebuild_observations, state)
         return self._state_to_runtime_status(state)
 
     async def start(self) -> None:
@@ -425,11 +642,10 @@ class ManagedReticulumAdapter(ReticulumAdapter):
         return list(self._paths)
 
     def get_interfaces(self) -> list[InterfaceRuntimeInfo]:
-        return list(self._interfaces)
+        return list(self._observed_interfaces or self._configured_interfaces)
 
     def set_interfaces(self, interfaces: list[InterfaceRuntimeInfo]) -> None:
-        self._interfaces = list(interfaces)
-        self._rebuild_observations()
+        self._configured_interfaces = list(interfaces)
 
     def get_announces(self) -> list[AnnounceEvent]:
         return list(self._announces)

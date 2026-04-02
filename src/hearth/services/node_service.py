@@ -7,7 +7,7 @@ from hearth.core.events import EventBus
 from hearth.interfaces.registry import InterfaceRegistry
 from hearth.monitor.health import HealthStatusEvaluator
 from hearth.monitor.metrics import MetricsCollector
-from hearth.reticulum.adapter import ReticulumAdapter
+from hearth.reticulum.adapter import InterfaceRuntimeInfo, ReticulumAdapter
 from hearth.storage.db import Database
 
 
@@ -31,6 +31,37 @@ class NodeService:
         self.database = database
         self.events = events
         self.observation_service = observation_service
+
+    def _merge_interfaces(
+        self,
+        configured: list[InterfaceRuntimeInfo],
+        observed: list[InterfaceRuntimeInfo],
+        *,
+        runtime_running: bool,
+    ) -> list[dict[str, Any]]:
+        configured_map = {item.name: item for item in configured}
+        observed_map = {item.name: item for item in observed}
+
+        ordered_names = [item.name for item in configured]
+        ordered_names.extend(item.name for item in observed if item.name not in configured_map)
+
+        merged: list[dict[str, Any]] = []
+        for name in ordered_names:
+            item = (observed_map.get(name) or configured_map.get(name))
+            if item is None:
+                continue
+            payload = item.to_dict()
+            if name in configured_map:
+                payload["enabled"] = configured_map[name].enabled
+            if not runtime_running:
+                payload = {
+                    **payload,
+                    "status": "stopped" if payload["enabled"] else payload["status"],
+                    "health_status": "warning" if payload["enabled"] else payload["health_status"],
+                }
+            merged.append(payload)
+
+        return merged
 
     async def start(self, reason: str = "manual") -> dict[str, Any]:
         await self.adapter.start()
@@ -59,21 +90,11 @@ class NodeService:
         return await self.status_summary(persist=True)
 
     async def status_summary(self, persist: bool = False) -> dict[str, Any]:
-        runtime = await self.adapter.refresh()
-        runtime_status = runtime.to_dict()
-
         interface_objects = [await self.interface_registry.get(name).get_status() for name in self.interface_registry.driver_names()]
         self.adapter.set_interfaces(interface_objects)
-        interfaces = [item.to_dict() for item in interface_objects]
-        if not runtime_status["running"]:
-            interfaces = [
-                {
-                    **item,
-                    "status": "stopped" if item["enabled"] else item["status"],
-                    "health_status": "warning" if item["enabled"] else item["health_status"],
-                }
-                for item in interfaces
-            ]
+        runtime = await self.adapter.refresh()
+        runtime_status = runtime.to_dict()
+        interfaces = self._merge_interfaces(interface_objects, self.adapter.get_interfaces(), runtime_running=runtime_status["running"])
 
         observation_counts = await self.observation_service.sync()
         peers = [peer.to_dict() for peer in self.observation_service.peer_store.list_recent()]

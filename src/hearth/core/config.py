@@ -27,6 +27,9 @@ class ReticulumSettings(BaseModel):
     shutdown_timeout_sec: int = 5
     transport_enabled: bool = True
     shared_instance: bool = True
+    instance_name: str = "default"
+    discover_interfaces: bool = False
+    autoconnect_discovered_interfaces: int = 0
     loglevel: int = 4
     render_managed_config: bool = True
     managed_command: str | None = None
@@ -149,7 +152,7 @@ class HearthSettings(BaseModel):
 
     @property
     def runtime_managed_config_path(self) -> Path:
-        return self.reticulum_config_path / "generated-reticulum.conf"
+        return self.reticulum_config_path / "config"
 
     @property
     def runtime_observations_path(self) -> Path:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from hearth.interfaces.registry import InterfaceRegistry
-from hearth.reticulum.adapter import ReticulumAdapter
+from hearth.reticulum.adapter import InterfaceRuntimeInfo, ReticulumAdapter
 from hearth.storage.db import Database
 
 
@@ -11,8 +11,30 @@ class InterfaceService:
         self.database = database
         self.adapter = adapter
 
+    def _merge_interfaces(
+        self,
+        configured: list[InterfaceRuntimeInfo],
+        observed: list[InterfaceRuntimeInfo],
+    ) -> list[dict]:
+        configured_map = {item.name: item for item in configured}
+        observed_map = {item.name: item for item in observed}
+
+        merged: list[dict] = []
+        for name in [item.name for item in configured]:
+            item = observed_map.get(name) or configured_map.get(name)
+            if item is None:
+                continue
+            payload = item.to_dict()
+            if name in configured_map:
+                payload["enabled"] = configured_map[name].enabled
+            merged.append(payload)
+        return merged
+
     async def list_interfaces(self) -> list[dict]:
-        items = await self.registry.list_statuses()
+        configured = [await self.registry.get(name).get_status() for name in self.registry.driver_names()]
+        self.adapter.set_interfaces(configured)
+        await self.adapter.refresh()
+        items = self._merge_interfaces(configured, self.adapter.get_interfaces())
         for item in items:
             self.database.upsert_interface_runtime(item)
         return [
@@ -21,8 +43,13 @@ class InterfaceService:
         ]
 
     async def get_interface(self, name: str) -> dict:
-        driver = self.registry.get(name)
-        item = (await driver.get_status()).to_dict()
+        configured = [await self.registry.get(driver_name).get_status() for driver_name in self.registry.driver_names()]
+        self.adapter.set_interfaces(configured)
+        await self.adapter.refresh()
+        merged = {item["name"]: item for item in self._merge_interfaces(configured, self.adapter.get_interfaces())}
+        item = merged.get(name)
+        if item is None:
+            raise KeyError(f"unknown interface: {name}")
         self.database.upsert_interface_runtime(item)
         item["last_seen_at"] = item["last_seen_at"].isoformat() if item["last_seen_at"] else None
         return item
@@ -50,4 +77,5 @@ class InterfaceService:
         return item
 
     async def metrics(self, name: str) -> dict:
-        return await self.registry.metrics(name)
+        interface = await self.get_interface(name)
+        return interface["metrics"]

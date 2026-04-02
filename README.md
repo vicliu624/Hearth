@@ -599,6 +599,14 @@ Hearth is **Linux-first** and already includes packaging-oriented assets such as
 
 The CLI can also render deployment artifacts through `hearth deploy ...` commands.
 
+For real Linux cutovers, `deploy.sh` now also supports adopting an existing user-owned Reticulum node in one step:
+
+```bash
+bash deploy.sh --adopt-existing-reticulum vicliu
+```
+
+That mode imports the user's existing `.reticulum/config`, rewires `lxmd`, masks the old standalone `rnsd.service`, and installs the friendlier `reticulum.service` / `lxmf.service` aliases described in `DEPLOYMENT.md`.
+
 Current deployment helpers include:
 
 - `hearth deploy systemd`

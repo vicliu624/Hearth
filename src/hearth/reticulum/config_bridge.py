@@ -57,7 +57,7 @@ class RuntimeConfigBridge:
     def _render_local_interface(self, item: InterfaceSettings) -> list[str]:
         payload = item.model_dump(mode="python")
         lines = [f"  [[{item.name}]]", "    type = AutoInterface"]
-        for option in self._common_options(payload, enabled_key="interface_enabled"):
+        for option in self._common_options(payload):
             lines.append("  " + option)
         mapping = {
             "group_id": "group_id",
@@ -156,6 +156,11 @@ class RuntimeConfigBridge:
             "[reticulum]",
             f"  enable_transport = {self._bool(self.settings.reticulum.transport_enabled)}",
             f"  share_instance = {self._bool(self.settings.reticulum.shared_instance)}",
+            f"  instance_name = {self.settings.reticulum.instance_name}",
+            f"  discover_interfaces = {self._bool(self.settings.reticulum.discover_interfaces)}",
+            f"  autoconnect_discovered_interfaces = {self.settings.reticulum.autoconnect_discovered_interfaces}",
+            "",
+            "[logging]",
             f"  loglevel = {self.settings.reticulum.loglevel}",
             "",
             "[interfaces]",

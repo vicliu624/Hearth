@@ -19,6 +19,7 @@ DATA_DIR="${DATA_DIR:-/var/lib/hearth}"
 SERVICE_NAME="${SERVICE_NAME:-hearth}"
 SERVICE_USER="${SERVICE_USER:-hearth}"
 SERVICE_GROUP="${SERVICE_GROUP:-$SERVICE_USER}"
+SERVICE_HOME=""
 
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8480}"
@@ -40,6 +41,8 @@ START_SERVICE=true
 INSTALL_DIR_EXPLICIT=false
 CONFIG_DIR_EXPLICIT=false
 DATA_DIR_EXPLICIT=false
+SERVICE_USER_EXPLICIT=false
+SERVICE_GROUP_EXPLICIT=false
 
 SYSTEMD_AVAILABLE=false
 CONFIG_CREATED=false
@@ -52,6 +55,22 @@ RESOLVED_BACKEND=""
 USE_SYSTEM_PYTHON_RUNTIME_DEPS=false
 SUDO=()
 STOPPED_RUNNING_SERVICE=false
+STOPPED_LEGACY_RNSD_SERVICE=false
+ADOPT_EXISTING_RETICULUM_USER=""
+RETICULUM_CONFIG_DIR=""
+RETICULUM_IMPORT_CONFIG=""
+RETICULUM_MANAGED_COMMAND=""
+INTEGRATE_LXMF=false
+MASK_LEGACY_RNSD=false
+INSTALL_SERVICE_ALIASES=false
+CONFIG_BACKUP_FILE=""
+LXMF_DROPIN_FILE="/etc/systemd/system/lxmd.service.d/hearth-reticulum.conf"
+LEGACY_RNSD_BACKUP_FILE="/etc/systemd/system/rnsd.service.disabled-by-hearth"
+SERVICE_ALIAS_RETICULUM_FILE="/etc/systemd/system/reticulum.service"
+SERVICE_ALIAS_LXMF_FILE="/etc/systemd/system/lxmf.service"
+LXMF_INTEGRATION_APPLIED=false
+LEGACY_RNSD_MASKED=false
+SERVICE_ALIASES_APPLIED=false
 
 log_info() {
     printf '%b[INFO]%b %s\n' "$BLUE" "$NC" "$1"
@@ -97,6 +116,20 @@ Options:
   --timezone TZ           Config timezone. Default: Asia/Shanghai
   --node-name NAME        Hearth node name. Default: current hostname
   --backend MODE          auto | mock_process | managed_rnsd. Default: auto
+  --service-user USER     systemd service user. Default: hearth
+  --service-group GROUP   systemd service group. Default: service user
+  --reticulum-config-dir PATH
+                          Managed Reticulum config directory
+  --reticulum-import-config PATH
+                          Import an existing Reticulum config into hearth.toml
+  --reticulum-managed-command CMD
+                          Explicit managed rnsd command or absolute path
+  --integrate-lxmf        Wire lxmd.service to follow hearth.service
+  --mask-legacy-rnsd      Mask standalone rnsd.service after cutover
+  --install-service-aliases
+                          Create reticulum.service and lxmf.service aliases
+  --adopt-existing-reticulum USER
+                          Import USER's ~/.reticulum and apply the cutover defaults
   --admin-token TOKEN     Admin token to write into the generated config
   --python PATH           Python interpreter to use. Must be Python 3.12+
   --overwrite-config      Rewrite an existing config file
@@ -112,6 +145,7 @@ Examples:
   bash deploy.sh
   bash deploy.sh --backend mock_process
   bash deploy.sh --overwrite-config --admin-token my-secret-token
+  bash deploy.sh --adopt-existing-reticulum vicliu
   bash deploy.sh --dev
 EOF
 }
@@ -140,6 +174,12 @@ require_absolute_path() {
 
 command_exists() {
     command -v "$1" >/dev/null 2>&1
+}
+
+get_user_home() {
+    local user_name="$1"
+
+    getent passwd "$user_name" | awk -F: '{print $6}' | head -n 1
 }
 
 python_path_is_usable() {
@@ -275,6 +315,50 @@ parse_args() {
                 BACKEND="$2"
                 shift 2
                 ;;
+            --service-user)
+                [[ $# -ge 2 ]] || die "--service-user requires a value"
+                SERVICE_USER="$2"
+                SERVICE_USER_EXPLICIT=true
+                shift 2
+                ;;
+            --service-group)
+                [[ $# -ge 2 ]] || die "--service-group requires a value"
+                SERVICE_GROUP="$2"
+                SERVICE_GROUP_EXPLICIT=true
+                shift 2
+                ;;
+            --reticulum-config-dir)
+                [[ $# -ge 2 ]] || die "--reticulum-config-dir requires a value"
+                RETICULUM_CONFIG_DIR="$2"
+                shift 2
+                ;;
+            --reticulum-import-config)
+                [[ $# -ge 2 ]] || die "--reticulum-import-config requires a value"
+                RETICULUM_IMPORT_CONFIG="$2"
+                shift 2
+                ;;
+            --reticulum-managed-command)
+                [[ $# -ge 2 ]] || die "--reticulum-managed-command requires a value"
+                RETICULUM_MANAGED_COMMAND="$2"
+                shift 2
+                ;;
+            --integrate-lxmf)
+                INTEGRATE_LXMF=true
+                shift
+                ;;
+            --mask-legacy-rnsd)
+                MASK_LEGACY_RNSD=true
+                shift
+                ;;
+            --install-service-aliases)
+                INSTALL_SERVICE_ALIASES=true
+                shift
+                ;;
+            --adopt-existing-reticulum)
+                [[ $# -ge 2 ]] || die "--adopt-existing-reticulum requires a user name"
+                ADOPT_EXISTING_RETICULUM_USER="$2"
+                shift 2
+                ;;
             --admin-token)
                 [[ $# -ge 2 ]] || die "--admin-token requires a value"
                 ADMIN_TOKEN="$2"
@@ -343,6 +427,54 @@ apply_mode_defaults() {
     fi
 }
 
+apply_option_defaults() {
+    local adopt_home=""
+
+    if [[ "$SERVICE_USER_EXPLICIT" == true && "$SERVICE_GROUP_EXPLICIT" == false ]]; then
+        SERVICE_GROUP="$SERVICE_USER"
+    fi
+
+    if [[ -z "$ADOPT_EXISTING_RETICULUM_USER" ]]; then
+        return
+    fi
+
+    if ! id -u "$ADOPT_EXISTING_RETICULUM_USER" >/dev/null 2>&1; then
+        die "Adoption target user does not exist: $ADOPT_EXISTING_RETICULUM_USER"
+    fi
+
+    if [[ "$SERVICE_USER_EXPLICIT" == true && "$SERVICE_USER" != "$ADOPT_EXISTING_RETICULUM_USER" ]]; then
+        die "--service-user conflicts with --adopt-existing-reticulum"
+    fi
+
+    adopt_home="$(get_user_home "$ADOPT_EXISTING_RETICULUM_USER")"
+    [[ -n "$adopt_home" ]] || die "Could not resolve home directory for $ADOPT_EXISTING_RETICULUM_USER"
+
+    SERVICE_USER="$ADOPT_EXISTING_RETICULUM_USER"
+    if [[ "$SERVICE_GROUP_EXPLICIT" == false ]]; then
+        SERVICE_GROUP="$ADOPT_EXISTING_RETICULUM_USER"
+    fi
+
+    if [[ -z "$RETICULUM_CONFIG_DIR" ]]; then
+        RETICULUM_CONFIG_DIR="$adopt_home/.reticulum"
+    fi
+    if [[ -z "$RETICULUM_IMPORT_CONFIG" ]]; then
+        RETICULUM_IMPORT_CONFIG="$RETICULUM_CONFIG_DIR/config"
+    fi
+    if [[ -z "$RETICULUM_MANAGED_COMMAND" ]]; then
+        if [[ -x "$adopt_home/.local/reticulum-venv/bin/rnsd" ]]; then
+            RETICULUM_MANAGED_COMMAND="$adopt_home/.local/reticulum-venv/bin/rnsd"
+        else
+            RETICULUM_MANAGED_COMMAND="rnsd"
+        fi
+    fi
+
+    BACKEND="managed_rnsd"
+    OVERWRITE_CONFIG=true
+    INTEGRATE_LXMF=true
+    MASK_LEGACY_RNSD=true
+    INSTALL_SERVICE_ALIASES=true
+}
+
 validate_inputs() {
     case "$BACKEND" in
         auto|mock_process|managed_rnsd)
@@ -359,6 +491,12 @@ validate_inputs() {
     require_no_spaces "$INSTALL_DIR" "Install directory"
     require_no_spaces "$CONFIG_DIR" "Config directory"
     require_no_spaces "$DATA_DIR" "Data directory"
+    if [[ -n "$RETICULUM_CONFIG_DIR" ]]; then
+        require_no_spaces "$RETICULUM_CONFIG_DIR" "Reticulum config directory"
+    fi
+    if [[ -n "$RETICULUM_IMPORT_CONFIG" ]]; then
+        require_no_spaces "$RETICULUM_IMPORT_CONFIG" "Reticulum import config"
+    fi
 
     [[ -d "$REPO_DIR" ]] || die "Repository directory does not exist: $REPO_DIR"
     [[ -f "$REPO_DIR/pyproject.toml" ]] || die "Repository directory does not look like the Hearth project: $REPO_DIR"
@@ -367,6 +505,16 @@ validate_inputs() {
         require_absolute_path "$INSTALL_DIR" "Install directory"
         require_absolute_path "$CONFIG_DIR" "Config directory"
         require_absolute_path "$DATA_DIR" "Data directory"
+        if [[ -n "$RETICULUM_CONFIG_DIR" ]]; then
+            require_absolute_path "$RETICULUM_CONFIG_DIR" "Reticulum config directory"
+        fi
+        if [[ -n "$RETICULUM_IMPORT_CONFIG" ]]; then
+            require_absolute_path "$RETICULUM_IMPORT_CONFIG" "Reticulum import config"
+        fi
+    fi
+
+    if [[ -n "$RETICULUM_IMPORT_CONFIG" && ! -f "$RETICULUM_IMPORT_CONFIG" ]]; then
+        die "Reticulum import config does not exist: $RETICULUM_IMPORT_CONFIG"
     fi
 }
 
@@ -455,6 +603,12 @@ prepare_paths() {
     INSTALL_DIR="$(python_realpath "$INSTALL_DIR")"
     CONFIG_DIR="$(python_realpath "$CONFIG_DIR")"
     DATA_DIR="$(python_realpath "$DATA_DIR")"
+    if [[ -n "$RETICULUM_CONFIG_DIR" ]]; then
+        RETICULUM_CONFIG_DIR="$(python_realpath "$RETICULUM_CONFIG_DIR")"
+    fi
+    if [[ -n "$RETICULUM_IMPORT_CONFIG" ]]; then
+        RETICULUM_IMPORT_CONFIG="$(python_realpath "$RETICULUM_IMPORT_CONFIG")"
+    fi
 
     CONFIG_FILE="$CONFIG_DIR/hearth.toml"
     VENV_DIR="$INSTALL_DIR/.venv"
@@ -493,6 +647,18 @@ create_service_account() {
     if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
         log_info "Creating service user: $SERVICE_USER"
         run_root useradd --system --gid "$SERVICE_GROUP" --home-dir "$INSTALL_DIR" --shell "$nologin_shell" "$SERVICE_USER"
+    fi
+}
+
+resolve_service_home() {
+    if [[ "$DEV_MODE" == true ]]; then
+        SERVICE_HOME="$INSTALL_DIR"
+        return
+    fi
+
+    SERVICE_HOME="$(get_user_home "$SERVICE_USER")"
+    if [[ -z "$SERVICE_HOME" ]]; then
+        SERVICE_HOME="$INSTALL_DIR"
     fi
 }
 
@@ -615,9 +781,38 @@ raise SystemExit(0 if importlib.util.find_spec("RNS.Utilities.rnsd") is not None
 PY
 }
 
+managed_command_is_usable() {
+    local configured_command="${1:-}"
+
+    [[ -n "$configured_command" ]] || return 1
+
+    "$VENV_PYTHON" - "$configured_command" <<'PY' >/dev/null 2>&1
+import importlib.util
+import shlex
+import shutil
+import sys
+from pathlib import Path
+
+parts = shlex.split(sys.argv[1])
+if not parts:
+    raise SystemExit(1)
+
+if len(parts) >= 3 and parts[1] == "-m" and parts[2] == "RNS.Utilities.rnsd":
+    raise SystemExit(0 if importlib.util.find_spec("RNS.Utilities.rnsd") is not None else 1)
+
+candidate = Path(parts[0]).expanduser()
+if candidate.is_absolute():
+    raise SystemExit(0 if candidate.exists() and candidate.is_file() and candidate.stat().st_mode & 0o111 else 1)
+
+raise SystemExit(0 if shutil.which(parts[0]) else 1)
+PY
+}
+
 resolve_backend() {
     if [[ "$BACKEND" == "auto" ]]; then
-        if command_exists rnsd || venv_has_rnsd_module; then
+        if [[ -n "$RETICULUM_IMPORT_CONFIG" || -n "$RETICULUM_MANAGED_COMMAND" ]]; then
+            RESOLVED_BACKEND="managed_rnsd"
+        elif command_exists rnsd || venv_has_rnsd_module; then
             RESOLVED_BACKEND="managed_rnsd"
         else
             RESOLVED_BACKEND="mock_process"
@@ -626,8 +821,11 @@ resolve_backend() {
         RESOLVED_BACKEND="$BACKEND"
     fi
 
-    if [[ "$RESOLVED_BACKEND" == "managed_rnsd" ]] && ! command_exists rnsd && ! venv_has_rnsd_module; then
-        die "managed_rnsd was requested, but no rnsd executable or RNS.Utilities.rnsd module was found. Install Reticulum first or use --backend mock_process."
+    if [[ "$RESOLVED_BACKEND" == "managed_rnsd" ]] \
+        && ! managed_command_is_usable "$RETICULUM_MANAGED_COMMAND" \
+        && ! command_exists rnsd \
+        && ! venv_has_rnsd_module; then
+        die "managed_rnsd was requested, but no usable rnsd command was found. Install Reticulum first, pass --reticulum-managed-command, or use --backend mock_process."
     fi
 
     log_success "Reticulum backend selected: $RESOLVED_BACKEND"
@@ -653,6 +851,7 @@ PY
 
 write_config_file() {
     local temp_config=""
+    local managed_command_value=""
 
     if [[ -f "$CONFIG_FILE" && "$OVERWRITE_CONFIG" == false ]]; then
         log_warn "Existing config preserved at $CONFIG_FILE"
@@ -662,12 +861,20 @@ write_config_file() {
     log_info "Generating Hearth config at $CONFIG_FILE"
     generate_admin_token_if_needed
     temp_config="$(mktemp)"
+    managed_command_value="${RETICULUM_MANAGED_COMMAND:-}"
 
-    "$VENV_PYTHON" - "$temp_config" "$DATA_DIR" "$HOST" "$PORT" "$ADMIN_TOKEN" "$TIMEZONE" "$NODE_NAME" "$RESOLVED_BACKEND" <<'PY'
+    if [[ -f "$CONFIG_FILE" ]]; then
+        CONFIG_BACKUP_FILE="${CONFIG_FILE}.bak.$(date +%Y%m%d-%H%M%S)"
+        log_info "Backing up existing config to $CONFIG_BACKUP_FILE"
+        run_root install -m 640 "$CONFIG_FILE" "$CONFIG_BACKUP_FILE"
+    fi
+
+    "$VENV_PYTHON" - "$temp_config" "$DATA_DIR" "$HOST" "$PORT" "$ADMIN_TOKEN" "$TIMEZONE" "$NODE_NAME" "$RESOLVED_BACKEND" "$RETICULUM_IMPORT_CONFIG" "$RETICULUM_CONFIG_DIR" "$managed_command_value" <<'PY'
 from pathlib import Path
 import sys
 
 import tomli_w
+from hearth.system.reticulum_import import build_deployment_payload
 
 output = Path(sys.argv[1])
 data_dir = Path(sys.argv[2])
@@ -677,66 +884,22 @@ admin_token = sys.argv[5]
 timezone = sys.argv[6]
 node_name = sys.argv[7]
 backend = sys.argv[8]
+import_path = Path(sys.argv[9]) if sys.argv[9] else None
+reticulum_config_dir = Path(sys.argv[10]) if sys.argv[10] else None
+managed_command = sys.argv[11] or None
 
-payload = {
-    "system": {
-        "node_name": node_name,
-        "data_dir": str(data_dir),
-        "log_level": "INFO",
-        "timezone": timezone,
-    },
-    "reticulum": {
-        "enabled": True,
-        "config_path": str(data_dir / "reticulum-config"),
-        "identity_path": str(data_dir / "identity"),
-        "auto_start": True,
-        "backend": backend,
-        "managed_command": "rnsd",
-        "render_managed_config": True,
-        "transport_enabled": True,
-        "shared_instance": True,
-        "loglevel": 4,
-        "heartbeat_interval_sec": 2,
-        "health_timeout_sec": 10,
-        "shutdown_timeout_sec": 5,
-    },
-    "web": {
-        "enabled": True,
-        "host": host,
-        "port": port,
-        "auth_mode": "local_token",
-    },
-    "security": {
-        "admin_token": admin_token,
-        "allow_lan": True,
-        "allow_wan": False,
-    },
-    "monitor": {
-        "health_check_interval_sec": 15,
-        "metrics_refresh_sec": 10,
-        "watchdog_enabled": True,
-        "auto_restart_runtime": True,
-        "auto_restart_interface": True,
-        "restart_cooldown_sec": 30,
-    },
-    "alerts": {
-        "webhook_enabled": False,
-        "include_resolved": True,
-        "delivery_timeout_sec": 5,
-        "sync_interval_sec": 30,
-    },
-    "interfaces": [
-        {
-            "name": "local_lan",
-            "type": "local",
-            "enabled": True,
-            "role": "transport",
-            "devices": ["eth0", "wlan0", "eno1", "enp0s31f6"],
-            "discovery_port": 29716,
-            "data_port": 42671,
-        }
-    ],
-}
+payload = build_deployment_payload(
+    data_dir=data_dir,
+    host=host,
+    port=port,
+    admin_token=admin_token,
+    timezone=timezone,
+    node_name=node_name,
+    backend=backend,
+    import_path=import_path,
+    reticulum_config_dir=reticulum_config_dir,
+    managed_command=managed_command,
+)
 
 output.write_text(tomli_w.dumps(payload), encoding="utf-8")
 PY
@@ -768,6 +931,7 @@ with config_path.open("rb") as handle:
 
 mapping = {
     "backend": payload.get("reticulum", {}).get("backend", ""),
+    "managed_command": payload.get("reticulum", {}).get("managed_command", ""),
     "host": payload.get("web", {}).get("host", ""),
     "port": payload.get("web", {}).get("port", ""),
 }
@@ -778,25 +942,28 @@ PY
 
 validate_effective_backend() {
     local effective_backend=""
+    local effective_managed_command=""
 
     effective_backend="$(read_config_field backend)"
     if [[ "$effective_backend" != "managed_rnsd" ]]; then
         return
     fi
 
-    if command_exists rnsd || venv_has_rnsd_module; then
+    effective_managed_command="$(read_config_field managed_command)"
+
+    if managed_command_is_usable "$effective_managed_command" || command_exists rnsd || venv_has_rnsd_module; then
         return
     fi
 
     if [[ "$CONFIG_CREATED" == true ]]; then
-        die "Generated config selected managed_rnsd, but rnsd is unavailable. Re-run with --backend mock_process."
+        die "Generated config selected managed_rnsd, but no usable rnsd command was found. Re-run with --backend mock_process or set --reticulum-managed-command."
     fi
 
     if [[ "$START_SERVICE" == true ]]; then
-        die "Existing config uses managed_rnsd, but rnsd is unavailable. Install Reticulum or re-run with --overwrite-config --backend mock_process."
+        die "Existing config uses managed_rnsd, but no usable rnsd command was found. Install Reticulum, update managed_command, or re-run with --overwrite-config --backend mock_process."
     fi
 
-    log_warn "Existing config uses managed_rnsd, but rnsd is unavailable. Service start was skipped, so deployment continues."
+    log_warn "Existing config uses managed_rnsd, but no usable rnsd command was found. Service start was skipped, so deployment continues."
 }
 
 verify_hearth_cli() {
@@ -836,8 +1003,39 @@ restore_service_ownership() {
     log_success "Runtime paths are owned by $SERVICE_USER:$SERVICE_GROUP"
 }
 
+systemd_unit_exists() {
+    local unit_name="$1"
+    local load_state=""
+
+    load_state="$(run_root systemctl show -P LoadState "$unit_name" 2>/dev/null || true)"
+    [[ -n "$load_state" && "$load_state" != "not-found" ]]
+}
+
+get_unit_fragment_path() {
+    local unit_name="$1"
+
+    run_root systemctl show -P FragmentPath "$unit_name" 2>/dev/null || true
+}
+
+path_requires_home_access() {
+    local candidate="$1"
+
+    case "$candidate" in
+        /home/*|/root/*)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 write_systemd_service() {
     local temp_service=""
+    local service_path=""
+    local read_write_paths=""
+    local protect_home="true"
+    local managed_command_dir=""
 
     if [[ "$DEV_MODE" == true || "$SYSTEMD_AVAILABLE" == false ]]; then
         return
@@ -845,6 +1043,38 @@ write_systemd_service() {
 
     log_info "Writing systemd service to $SERVICE_FILE"
     temp_service="$(mktemp)"
+    service_path="$VENV_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    read_write_paths="$DATA_DIR $CONFIG_DIR"
+
+    if [[ -n "$RETICULUM_CONFIG_DIR" ]]; then
+        read_write_paths="$read_write_paths $RETICULUM_CONFIG_DIR"
+    fi
+
+    if [[ -n "$RETICULUM_MANAGED_COMMAND" ]]; then
+        managed_command_dir="$("$VENV_PYTHON" - "$RETICULUM_MANAGED_COMMAND" <<'PY'
+import shlex
+import sys
+from pathlib import Path
+
+parts = shlex.split(sys.argv[1])
+if not parts:
+    raise SystemExit(0)
+
+candidate = Path(parts[0]).expanduser()
+if candidate.is_absolute():
+    print(candidate.parent)
+PY
+)"
+        if [[ -n "$managed_command_dir" ]]; then
+            service_path="$service_path:$managed_command_dir"
+        fi
+    fi
+
+    if path_requires_home_access "$SERVICE_HOME" \
+        || path_requires_home_access "$RETICULUM_CONFIG_DIR" \
+        || path_requires_home_access "$RETICULUM_MANAGED_COMMAND"; then
+        protect_home="false"
+    fi
 
     cat >"$temp_service" <<EOF
 [Unit]
@@ -859,8 +1089,9 @@ Group=$SERVICE_GROUP
 WorkingDirectory=$INSTALL_DIR
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=HOME=$SERVICE_HOME
 Environment=HEARTH_CONFIG=$CONFIG_FILE
-Environment=PATH=$VENV_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PATH=$service_path
 ExecStart=$VENV_DIR/bin/hearth-api
 Restart=on-failure
 RestartSec=5
@@ -869,8 +1100,8 @@ UMask=0027
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=full
-ProtectHome=true
-ReadWritePaths=$DATA_DIR $CONFIG_DIR
+ProtectHome=$protect_home
+ReadWritePaths=$read_write_paths
 
 [Install]
 WantedBy=multi-user.target
@@ -878,9 +1109,116 @@ EOF
 
     run_root install -m 644 "$temp_service" "$SERVICE_FILE"
     rm -f "$temp_service"
+    log_success "systemd unit installed"
+}
+
+configure_lxmf_integration() {
+    local temp_dropin=""
+
+    if [[ "$DEV_MODE" == true || "$SYSTEMD_AVAILABLE" == false || "$INTEGRATE_LXMF" == false ]]; then
+        return
+    fi
+
+    if ! systemd_unit_exists lxmd.service; then
+        log_warn "Requested LXMF integration, but lxmd.service was not found"
+        return
+    fi
+
+    log_info "Writing lxmd.service drop-in so LXMF follows Hearth"
+    temp_dropin="$(mktemp)"
+    cat >"$temp_dropin" <<EOF
+[Unit]
+After=hearth.service
+Requires=hearth.service
+PartOf=hearth.service
+EOF
+
+    run_root mkdir -p "$(dirname "$LXMF_DROPIN_FILE")"
+    run_root install -m 644 "$temp_dropin" "$LXMF_DROPIN_FILE"
+    rm -f "$temp_dropin"
+    LXMF_INTEGRATION_APPLIED=true
+    log_success "LXMF integration drop-in installed"
+}
+
+stop_legacy_rnsd_service_if_needed() {
+    if [[ "$DEV_MODE" == true || "$SYSTEMD_AVAILABLE" == false || "$MASK_LEGACY_RNSD" == false ]]; then
+        return
+    fi
+
+    if systemd_unit_exists rnsd.service && run_root systemctl is-active --quiet rnsd.service; then
+        log_info "Stopping standalone rnsd.service before Hearth takes over"
+        run_root systemctl stop rnsd.service
+        STOPPED_LEGACY_RNSD_SERVICE=true
+    fi
+}
+
+mask_legacy_rnsd_service() {
+    if [[ "$DEV_MODE" == true || "$SYSTEMD_AVAILABLE" == false || "$MASK_LEGACY_RNSD" == false ]]; then
+        return
+    fi
+
+    if [[ -f /etc/systemd/system/rnsd.service && ! -L /etc/systemd/system/rnsd.service && ! -f "$LEGACY_RNSD_BACKUP_FILE" ]]; then
+        log_info "Preserving existing rnsd.service at $LEGACY_RNSD_BACKUP_FILE"
+        run_root mv /etc/systemd/system/rnsd.service "$LEGACY_RNSD_BACKUP_FILE"
+    fi
+
+    log_info "Masking standalone rnsd.service"
+    run_root systemctl mask rnsd.service >/dev/null 2>&1 || run_root ln -sfn /dev/null /etc/systemd/system/rnsd.service
+    LEGACY_RNSD_MASKED=true
+    log_success "Standalone rnsd.service is masked"
+}
+
+install_service_aliases() {
+    local lxmd_fragment=""
+
+    if [[ "$DEV_MODE" == true || "$SYSTEMD_AVAILABLE" == false || "$INSTALL_SERVICE_ALIASES" == false ]]; then
+        return
+    fi
+
+    log_info "Installing service aliases"
+    run_root ln -sfn "$SERVICE_FILE" "$SERVICE_ALIAS_RETICULUM_FILE"
+    SERVICE_ALIASES_APPLIED=true
+
+    if [[ "$INTEGRATE_LXMF" == true ]] && systemd_unit_exists lxmd.service; then
+        lxmd_fragment="$(get_unit_fragment_path lxmd.service)"
+        if [[ -n "$lxmd_fragment" ]]; then
+            run_root ln -sfn "$lxmd_fragment" "$SERVICE_ALIAS_LXMF_FILE"
+        fi
+    fi
+
+    log_success "Service aliases installed"
+}
+
+reload_systemd_units() {
+    if [[ "$DEV_MODE" == true || "$SYSTEMD_AVAILABLE" == false ]]; then
+        return
+    fi
 
     run_root systemctl daemon-reload
-    log_success "systemd unit installed"
+}
+
+manage_lxmf_service() {
+    local action="${1:-start}"
+
+    if [[ "$DEV_MODE" == true || "$SYSTEMD_AVAILABLE" == false || "$INTEGRATE_LXMF" == false ]]; then
+        return
+    fi
+
+    if ! systemd_unit_exists lxmd.service; then
+        return
+    fi
+
+    if [[ "$action" == "enable" && "$ENABLE_SERVICE" == true ]]; then
+        log_info "Enabling lxmd.service"
+        run_root systemctl enable lxmd.service >/dev/null 2>&1 || true
+    fi
+
+    if [[ "$action" == "start" && "$START_SERVICE" == true ]]; then
+        log_info "Restarting lxmd.service"
+        run_root systemctl restart lxmd.service
+        run_root systemctl is-active --quiet lxmd.service
+        log_success "LXMF service is active"
+    fi
 }
 
 manage_service() {
@@ -896,6 +1234,7 @@ manage_service() {
     if [[ "$ENABLE_SERVICE" == true ]]; then
         log_info "Enabling systemd service"
         run_root systemctl enable "$SERVICE_NAME"
+        manage_lxmf_service enable
     else
         log_info "Skipping systemd enable step"
     fi
@@ -905,9 +1244,12 @@ manage_service() {
         run_root systemctl restart "$SERVICE_NAME"
         run_root systemctl is-active --quiet "$SERVICE_NAME"
         log_success "Hearth service is active"
+        manage_lxmf_service start
     else
         if [[ "$STOPPED_RUNNING_SERVICE" == true ]]; then
             log_warn "A running Hearth service was stopped for deployment and was not restarted because --no-start was used"
+        elif [[ "$STOPPED_LEGACY_RNSD_SERVICE" == true ]]; then
+            log_warn "standalone rnsd.service was stopped for cutover and was not restarted because --no-start was used"
         else
             log_info "Skipping service start"
         fi
@@ -948,8 +1290,15 @@ print_summary() {
     printf '  Install dir : %s\n' "$INSTALL_DIR"
     printf '  Config file : %s\n' "$CONFIG_FILE"
     printf '  Data dir    : %s\n' "$DATA_DIR"
+    printf '  Service user: %s\n' "$SERVICE_USER"
     printf '  Backend     : %s\n' "$effective_backend"
     printf '  Web URL     : http://%s:%s/login\n' "$access_host" "$effective_port"
+    if [[ -n "$RETICULUM_CONFIG_DIR" ]]; then
+        printf '  RNS config  : %s\n' "$RETICULUM_CONFIG_DIR"
+    fi
+    if [[ -n "$CONFIG_BACKUP_FILE" ]]; then
+        printf '  Config backup: %s\n' "$CONFIG_BACKUP_FILE"
+    fi
 
     if [[ "$CONFIG_CREATED" == true ]]; then
         printf '  Admin token : %s\n' "$ADMIN_TOKEN"
@@ -967,8 +1316,20 @@ print_summary() {
     if [[ "$SYSTEMD_AVAILABLE" == true ]]; then
         printf '\n'
         printf 'Useful commands:\n'
+        if [[ "$SERVICE_ALIASES_APPLIED" == true ]]; then
+            printf '  sudo systemctl status reticulum'
+            if [[ "$INTEGRATE_LXMF" == true ]]; then
+                printf ' lxmf'
+            fi
+            printf '\n'
+        fi
         printf '  sudo systemctl status %s\n' "$SERVICE_NAME"
-        printf '  sudo journalctl -u %s -f\n' "$SERVICE_NAME"
+        if [[ "$INTEGRATE_LXMF" == true ]]; then
+            printf '  sudo systemctl status lxmd\n'
+            printf '  sudo journalctl -u %s -u lxmd -f\n' "$SERVICE_NAME"
+        else
+            printf '  sudo journalctl -u %s -f\n' "$SERVICE_NAME"
+        fi
     else
         printf '\n'
         printf 'systemd was not detected, so start Hearth manually with:\n'
@@ -979,6 +1340,7 @@ print_summary() {
 main() {
     parse_args "$@"
     apply_mode_defaults
+    apply_option_defaults
     validate_inputs
 
     if [[ "$(uname -s)" != "Linux" ]]; then
@@ -992,6 +1354,7 @@ main() {
     prepare_paths
     validate_managed_install_dir
     create_service_account
+    resolve_service_home
     stop_running_service_if_needed
     sync_source_tree
     prepare_directories
@@ -1004,6 +1367,11 @@ main() {
     run_preflight_check
     restore_service_ownership
     write_systemd_service
+    configure_lxmf_integration
+    stop_legacy_rnsd_service_if_needed
+    mask_legacy_rnsd_service
+    install_service_aliases
+    reload_systemd_units
     manage_service
     print_summary
 }

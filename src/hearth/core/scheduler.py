@@ -22,8 +22,10 @@ class AsyncScheduler:
     def add_job(self, name: str, interval_seconds: int, job: Job) -> None:
         async def runner() -> None:
             while self._running:
-                await job()
                 await asyncio.sleep(interval_seconds)
+                if not self._running:
+                    break
+                await job()
 
         self._tasks.append(asyncio.create_task(runner(), name=f"scheduler:{name}"))
 
