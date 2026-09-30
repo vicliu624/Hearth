@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Explain graph nodes in plain language and add connection focus, full related-path browsing, connection inspection, route filters, pagination, address copying and navigation back to the graph.
+
 - Add an interactive local topology graph with pan, zoom, connection filtering and path details; distinguish observed interface relationships from inferred forwarding relationships.
 - Preserve distinct accepted TCP connections and count all paths in topology summaries instead of truncating at 300. Explain unsupported peer observation and link the peer page to the graph.
 

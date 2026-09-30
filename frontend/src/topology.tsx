@@ -13,7 +13,9 @@ type N = {
 export function TopologyPage() {
   const view = useView(),
     graph = view.topology || {};
-  const [query, setQuery] = useState(""),
+  const [query, setQuery] = useState(
+      new URLSearchParams(location.search).get("connection") || "",
+    ),
     [selected, setSelected] = useState<N | null>(null),
     [zoom, setZoom] = useState(1),
     [pan, setPan] = useState({ x: 0, y: 0 });
@@ -44,7 +46,7 @@ export function TopologyPage() {
       id: name,
       x: 500 + 180 * Math.cos(angle),
       y: 390 + 180 * Math.sin(angle),
-      label: name,
+      label: t("topology.connection_label", { number: i + 1 }),
       kind: "connection",
     };
     nodes.push(n);
@@ -56,7 +58,7 @@ export function TopologyPage() {
         id: `${name}:${b.next_hop}`,
         x: 500 + 300 * Math.cos(a),
         y: 390 + 300 * Math.sin(a),
-        label: b.next_hop ? b.next_hop.slice(0, 8) + "…" : "?",
+        label: t("topology.forward_label"),
         kind: "next",
         branch: b,
       };
@@ -66,7 +68,7 @@ export function TopologyPage() {
         id: hop.id + ":dest",
         x: 500 + 405 * Math.cos(a),
         y: 390 + 355 * Math.sin(a),
-        label: String(b.count),
+        label: `${b.count} ${t("topology.address_unit")}`,
         count: b.count,
         kind: "dest",
         branch: b,
@@ -76,6 +78,10 @@ export function TopologyPage() {
     });
   });
   const choose = (n: N) => setSelected(n);
+  const selectedInterface =
+    selected?.branch?.interface ||
+    (selected?.kind === "connection" ? selected.id : "");
+  const relatedPaths = `/routes?interface=${encodeURIComponent(selectedInterface)}${selected?.branch ? `&via=${encodeURIComponent(selected.branch.next_hop)}` : ""}`;
   return (
     <>
       <PageHeading
@@ -86,7 +92,7 @@ export function TopologyPage() {
         title={t("topology.connection_graph")}
         extra={
           <Tag>
-            {graph.overview?.route_count || 0} {t("topology.destinations")}
+            {branches.reduce((total, branch) => total + branch.count, 0)} {t("topology.destinations")}
           </Tag>
         }
       >
@@ -115,11 +121,30 @@ export function TopologyPage() {
             {t("topology.reset")}
           </Button>
         </div>
-        <p className="topology-legend">
-          ● {t("topology.local_node")}　● {t("topology.connection")}　●{" "}
-          {t("topology.next_hop")}　● {t("topology.destinations")} ·{" "}
-          {t("topology.line_legend")}
-        </p>
+        <div className="topology-legend">
+          {[
+            ["#78af9e", "local_node"],
+            ["#b9dfef", "connection"],
+            ["#e3d0ef", "forward_label"],
+            ["#f3dfad", "address_unit"],
+          ].map(([color, key]) => (
+            <span key={key} style={{ marginRight: 16 }}>
+              <span
+                aria-hidden="true"
+                style={{
+                  display: "inline-block",
+                  background: color,
+                  width: 14,
+                  height: 14,
+                  borderRadius: "50%",
+                  marginRight: 6,
+                }}
+              />
+              {t(`topology.${key}`)}
+            </span>
+          ))}
+        </div>
+        <p>{t("topology.guide")}</p>
         <svg
           className="topology-canvas"
           viewBox="0 0 1000 780"
@@ -172,7 +197,7 @@ export function TopologyPage() {
                 transform={`translate(${n.x} ${n.y})`}
                 role="button"
                 tabIndex={0}
-                aria-label={`${n.kind}: ${n.label}`}
+                aria-label={n.label}
                 onClick={() => choose(n)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
@@ -201,10 +226,10 @@ export function TopologyPage() {
                   {n.kind === "dest"
                     ? n.count
                     : n.kind === "local"
-                      ? "H"
+                      ? t("topology.local_short")
                       : n.kind === "connection"
-                        ? "↔"
-                        : "↗"}
+                        ? n.label
+                        : t("topology.forward_short")}
                 </text>
                 {(n.kind === "local" || n.kind === "connection") && (
                   <text
@@ -214,7 +239,7 @@ export function TopologyPage() {
                     fill="#504838"
                   >
                     {n.kind === "connection"
-                      ? n.label.split("/").slice(1).join("/") || n.label
+                      ? n.id.split("/").slice(1).join("/") || n.id
                       : n.label}
                   </text>
                 )}
@@ -223,22 +248,58 @@ export function TopologyPage() {
           </g>
         </svg>
         <p>{t("topology.interaction")}</p>
-        <p>{t("topology.local_explanation")}</p>
+        <p>{t("topology.line_legend")}</p>
+        <p>{t("topology.limit_note")}</p>
         {!branches.length && <p>{t("topology.no_matching_paths")}</p>}
       </Board>
       <Board title={selected?.label || t("topology.select_node")}>
-        <p>{t("topology.peer_explanation")}</p>
+        <p>
+          {selected
+            ? selected.kind === "local"
+              ? t("topology.local_detail")
+              : selected.kind === "connection"
+                ? t("topology.connection_detail")
+                : selected.kind === "dest"
+                  ? t("topology.count_detail", { count: selected.count || 0 })
+                  : t("topology.forward_detail")
+            : t("topology.guide")}
+        </p>
+        {selectedInterface && (
+          <div className="topology-tools">
+            <Button
+              onClick={() => {
+                setQuery(selectedInterface);
+                setZoom(1);
+                setPan({ x: 0, y: 0 });
+              }}
+            >
+              {t("topology.focus_connection")}
+            </Button>
+            <LinkButton to={relatedPaths}>
+              {t("topology.browse_paths")}
+            </LinkButton>
+            <LinkButton
+              to={`/interfaces/${encodeURIComponent(selectedInterface)}`}
+            >
+              {t("topology.inspect_connection")}
+            </LinkButton>
+          </div>
+        )}
+        {selected?.kind === "connection" && <code>{selected.id}</code>}
         {selected?.branch && (
           <>
             <p>{selected.branch.interface}</p>
-            <p>
+            <details>
+              <summary>{t("topology.raw_id")}</summary>
               {t("topology.next_hop")}:{" "}
               <code>{selected.branch.next_hop || "—"}</code>
-            </p>
+            </details>
             <p>
               {t("topology.hop_distribution")}:{" "}
               {Object.entries(selected.branch.hops)
-                .map(([h, n]) => `${h}: ${n}`)
+                .map(([h, n]) =>
+                  t("topology.hop_sentence", { hops: h, count: String(n) }),
+                )
                 .join(" · ")}
             </p>
             <p>{t("topology.sample_limit")}</p>

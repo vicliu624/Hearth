@@ -62,6 +62,7 @@ import {
   MetricsPage,
   OverviewPage,
 } from "./pages";
+import { RoutesPage } from "./routes";
 import { TopologyPage } from "./topology";
 import { ServerPage } from "./server-page";
 
@@ -257,6 +258,8 @@ function App() {
       <InterfacesPage />
     ) : path === "/metrics-dashboard" ? (
       <MetricsPage />
+    ) : path === "/routes" || path.startsWith("/routes/") ? (
+      <RoutesPage />
     ) : path === "/topology" ? (
       <TopologyPage />
     ) : path === "/health" ? (

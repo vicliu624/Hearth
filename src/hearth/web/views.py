@@ -1204,7 +1204,7 @@ async def render_routes_page(
     request: Request, context: ApplicationContext
 ) -> HTMLResponse:
     summary = await context.node_service.status_summary(persist=False)
-    routes = await context.route_service.list_routes(limit=100)
+    routes = await context.route_service.list_routes(limit=None)
     for item in routes:
         item["detail_href"] = build_href(request, f"/routes/{item['destination_hash']}")
     return render_page(
