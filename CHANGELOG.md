@@ -1,16 +1,31 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-09-30
 
-- Implement an encrypted Matrix ↔ LXMF text bridge with persistent identity, explicit recipient commands and reply routing, durable queues, bounded retries, message deduplication and live worker status. Add pause/resume, queued test delivery and retry controls.
+### Interactive topology and path exploration
 
-- Centre selected topology nodes and expand their children in the graph, with full destination pagination and back navigation.
-- Clarify bridge implementation limits and configuration state; Reticulum being running no longer implies a bridge worker is running.
+- Add a graph built from observed connections and learned paths. Clicking a node centres it and expands the next level; add graph pagination, back navigation, pan, zoom and connection filtering.
+- Preserve distinct accepted TCP connections. Count all paths instead of truncating topology at 300, and replace the first-100 path list with filtering and pagination across the full snapshot.
+- Add connection inspection, address copying, related-path browsing and navigation from an address back to its graph connection. Explain graph colours, destination counts and the limits of locally observed topology in Chinese and English.
 
-- Explain graph nodes in plain language and add connection focus, full related-path browsing, connection inspection, route filters, pagination, address copying and navigation back to the graph.
+### Encrypted Matrix ↔ LXMF messaging
 
-- Add an interactive local topology graph with pan, zoom, connection filtering and path details; distinguish observed interface relationships from inferred forwarding relationships.
-- Preserve distinct accepted TCP connections and count all paths in topology summaries instead of truncating at 300. Explain unsupported peer observation and link the peer page to the graph.
+- Implement a separate supervised worker for two-way text messaging between an encrypted Matrix room and LXMF users. Support explicit recipient commands, reply routing and help/address commands.
+- Persist the LXMF identity, Matrix encryption keys, sync cursor, reply mapping and SQLite message queue. Deduplicate incoming events, reuse transaction IDs for Matrix retries, and retain pending messages across restarts.
+- Add bounded retries, recovery of limited Matrix timelines, and retention of encrypted events awaiting keys. Pause forwarding without discarding messages arriving during the pause.
+- Show verified worker status, queue counts and the LXMF address in Hearth. Add pause/resume, queued test delivery and retry-failed controls.
+- Add the optional `matrix_bridge` dependency extra, pinned bridge dependency constraints, a systemd unit and an operating guide.
+
+### Clear capability reporting
+
+- Configuration state no longer implies that a bridge process is running. Explain that MQTT forwarding is not implemented and Webhook currently supports manual tests only.
+- Correct misleading configured/disabled labels and localize bridge descriptions and health-check messages.
+
+### Scope and compatibility
+
+- Matrix/LXMF bridging currently forwards text, up to 8192 UTF-8 bytes per message; attachments are not forwarded. The bridge decrypts and re-encrypts locally and is a trusted endpoint between the two encrypted protocols.
+- Existing configuration, identities and data remain compatible. Existing Matrix installations require the separate worker and private credentials; upgrading Hearth alone does not provision a bot or room. See `docs/matrix-lxmf-bridge.md`.
+- The graph shows paths known to the local node, not a reconstruction of the entire remote network. It uses no geographic coordinates and does not enable public interface advertisements.
 
 ## 0.2.0 — 2026-09-30
 

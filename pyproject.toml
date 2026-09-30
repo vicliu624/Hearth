@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hearth"
-version = "0.2.0"
+version = "0.3.0"
 description = "Hearth: a control plane for Personal Reticulum Transport Nodes"
 readme = "README.md"
 requires-python = ">=3.12"
