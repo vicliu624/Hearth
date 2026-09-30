@@ -681,7 +681,8 @@ signature_required = true
     assert "Health checks" in detail_page.text
     assert "Recent operations" in detail_page.text
     assert "Test delivery" in detail_page.text
-    assert "Disable bridge" in detail_page.text
+    assert "Disable configuration" in detail_page.text
+    assert "Forwarding not implemented" in detail_page.text
     assert sync_page.status_code == 200
     assert "Bridge operation completed." in sync_page.text
     assert "Signature verification" in sync_page.text
@@ -694,7 +695,7 @@ signature_required = true
     assert "simulated" in test_delivery_page.text
     assert disable_page.status_code == 200
     assert "Bridge operation completed." in disable_page.text
-    assert "Enable bridge" in disable_page.text
+    assert "Enable configuration" in disable_page.text
 
 
 TOPOLOGY_UI_CONFIG = """

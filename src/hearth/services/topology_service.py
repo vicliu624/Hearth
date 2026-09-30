@@ -327,13 +327,9 @@ class TopologyService:
                 route.get("hop_count") if route.get("hop_count") is not None else "?"
             )
             branch["hops"][hops] = branch["hops"].get(hops, 0) + 1
-            if len(branch["destinations"]) < 30:
-                branch["destinations"].append(
-                    {
-                        "hash": route.get("destination_hash"),
-                        "hops": route.get("hop_count"),
-                    }
-                )
+            branch["destinations"].append(
+                {"hash": route.get("destination_hash"), "hops": route.get("hop_count")}
+            )
         return {
             "branches": sorted(
                 branches.values(), key=lambda x: (x["interface"], x["next_hop"])

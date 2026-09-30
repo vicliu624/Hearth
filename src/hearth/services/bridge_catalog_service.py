@@ -55,7 +55,7 @@ class BridgeCatalogService:
         return None
 
     def _status_for_bridge(self, enabled: bool, runtime_status: str) -> tuple[str, str]:
-        status = "running" if enabled and runtime_status == "running" else "idle" if enabled else "disabled"
+        status = "idle" if enabled else "disabled"  # Config state is not proof of a bridge worker.
         health = "healthy" if status == "running" else "warning" if enabled else "disabled"
         return status, health
 

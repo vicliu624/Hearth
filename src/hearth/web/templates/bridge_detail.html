@@ -1,13 +1,14 @@
 {% extends "base.html" %}
 
 {% block content %}
+<section class="panel"><p>{{ t("bridges.implementation_note") }}</p></section>
 <section class="page-hero">
   <div>
     <p class="page-kicker">{{ t("nav.bridges") }}</p>
     <h1>{{ bridge.label }}</h1>
-    <p class="page-subtitle">{{ bridge.transport }} - {{ bridge.summary }}</p>
+    <p class="page-subtitle">{{ bridge.transport }} - {{ t("bridges." ~ bridge.transport ~ "_summary") if bridge.transport in ["matrix", "mqtt", "webhook"] else bridge.summary }}</p>
   </div>
-  <div class="hero-meta-pill">{{ tv(bridge.status) }}</div>
+  <div class="hero-meta-pill">{{ t("bridges.test_only" if bridge.transport == "webhook" else "bridges.not_implemented") }}</div>
 </section>
 
 <section class="dashboard-grid">
@@ -17,12 +18,12 @@
       <dt>{{ t("field.name") }}</dt><dd>{{ bridge.name }}</dd>
       <dt>{{ t("bridges.plugin") }}</dt><dd>{{ bridge.plugin_name }}</dd>
       <dt>{{ t("field.transport") }}</dt><dd>{{ bridge.transport }}</dd>
-      <dt>{{ t("field.status") }}</dt><dd>{{ tv(bridge.status) }}</dd>
-      <dt>{{ t("field.health") }}</dt><dd>{{ tv(bridge.health) }}</dd>
+      <dt>{{ t("field.status") }}</dt><dd>{{ t("bridges.test_only" if bridge.transport == "webhook" else "bridges.not_implemented") }}</dd>
+      <dt>{{ t("field.health") }}</dt><dd>{{ t("bridges.not_monitored") }}</dd>
       <dt>{{ t("field.endpoint") }}</dt><dd>{{ bridge.endpoint }}</dd>
       <dt>{{ t("field.mode") }}</dt><dd>{{ bridge.mode }}</dd>
       <dt>{{ t("field.source") }}</dt><dd>{{ bridge.source }}</dd>
-      <dt>{{ t("field.summary") }}</dt><dd>{{ bridge.summary }}</dd>
+      <dt>{{ t("field.summary") }}</dt><dd>{{ t("bridges." ~ bridge.transport ~ "_summary") if bridge.transport in ["matrix", "mqtt", "webhook"] else bridge.summary }}</dd>
     </dl>
   </section>
 

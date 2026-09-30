@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
+<section class="panel"><p>{{ t("bridges.implementation_note") }}</p></section>
 <section class="page-hero">
   <div>
     <p class="page-kicker">{{ t("nav.bridges") }}</p>
@@ -62,13 +63,13 @@
           <span class="muted">{{ bridge.plugin_name }}</span>
         </td>
         <td>{{ bridge.transport }}</td>
-        <td><span class="status-chip status-chip--{{ bridge.tone }}">{{ tv(bridge.status) }}</span></td>
-        <td>{{ tv(bridge.health) }}</td>
-        <td>{{ tv('enabled' if bridge.configured else 'disabled') }}</td>
+        <td><span class="status-chip status-chip--{{ bridge.tone }}">{{ t("bridges.test_only" if bridge.transport == "webhook" else "bridges.not_implemented") }}</span></td>
+        <td>{{ t("bridges.not_monitored") }}</td>
+        <td>{{ t("bridges.configured_yes" if bridge.configured else "bridges.not_configured") }}</td>
         <td>{{ bridge.endpoint }}</td>
         <td>{{ bridge.mode }}</td>
         <td>{{ bridge.source }}</td>
-        <td>{{ bridge.summary }}</td>
+        <td>{{ t("bridges." ~ bridge.transport ~ "_summary") if bridge.transport in ["matrix", "mqtt", "webhook"] else bridge.summary }}</td>
       </tr>
       {% else %}
       <tr>

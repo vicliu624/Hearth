@@ -899,6 +899,7 @@ signature_required = true
 
     assert detail.status_code == 200
     assert detail.json()["plugin_name"] == "matrix_bridge"
+    assert detail.json()["status"] != "running"
     assert detail.json()["actions"][0] == "disable"
     assert "test_delivery" in detail.json()["actions"]
     assert len(detail.json()["health_checks"]) >= 4

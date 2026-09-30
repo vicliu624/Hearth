@@ -525,6 +525,6 @@ def test_topology_branches_include_more_than_300_paths(tmp_path, monkeypatch):
         assert snapshot["overview"]["route_count"] == 650
         assert len(snapshot["branches"]) == 2
         assert sum(b["count"] for b in snapshot["branches"]) == 650
-        assert all(len(b["destinations"]) == 30 for b in snapshot["branches"])
+        assert all(len(b["destinations"]) == 325 for b in snapshot["branches"])
 
     asyncio.run(scenario())

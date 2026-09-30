@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Centre selected topology nodes and expand their children in the graph, with full destination pagination and back navigation.
+- Clarify bridge implementation limits and configuration state; Reticulum being running no longer implies a bridge worker is running.
+
 - Explain graph nodes in plain language and add connection focus, full related-path browsing, connection inspection, route filters, pagination, address copying and navigation back to the graph.
 
 - Add an interactive local topology graph with pan, zoom, connection filtering and path details; distinguish observed interface relationships from inferred forwarding relationships.

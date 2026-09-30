@@ -9,6 +9,8 @@ type N = {
   kind: string;
   branch?: Data;
   count?: number;
+  address?: string;
+  hops?: number;
 };
 export function TopologyPage() {
   const view = useView(),
@@ -19,6 +21,8 @@ export function TopologyPage() {
     [selected, setSelected] = useState<N | null>(null),
     [zoom, setZoom] = useState(1),
     [pan, setPan] = useState({ x: 0, y: 0 });
+  const [trail, setTrail] = useState<N[]>([]);
+  const [childPage, setChildPage] = useState(0);
   const drag = React.useRef<{
     x: number;
     y: number;
@@ -77,7 +81,108 @@ export function TopologyPage() {
       edges.push({ a: hop, b: d, inferred: true });
     });
   });
-  const choose = (n: N) => setSelected(n);
+  const focus = trail.at(-1);
+  let childCount = 0;
+  if (focus) {
+    const center = { ...focus, x: 500, y: 390 };
+    const currentBranch =
+      (graph.branches || []).find(
+        (b: Data) =>
+          b.interface === focus.branch?.interface &&
+          b.next_hop === focus.branch?.next_hop,
+      ) || focus.branch;
+    let children: N[] = [];
+    if (
+      focus.kind === "connection" ||
+      focus.kind === "next" ||
+      focus.kind === "local"
+    ) {
+      children = edges.filter((e) => e.a.id === focus.id).map((e) => e.b);
+    } else if (focus.kind === "dest" && currentBranch) {
+      children = currentBranch.destinations.map((d: Data) => ({
+        id: `address:${d.hash}`,
+        x: 0,
+        y: 0,
+        label: d.hash.slice(0, 8) + "…",
+        kind: "address",
+        address: d.hash,
+        hops: d.hops,
+        branch: currentBranch,
+      }));
+      center.count = currentBranch.count;
+    } else if (focus.kind === "address") {
+      children = [
+        {
+          id: "info:hops",
+          x: 0,
+          y: 0,
+          label: `${focus.hops ?? "?"} ${t("topology.hop_unit")}`,
+          kind: "info",
+        },
+        {
+          id: "info:connection",
+          x: 0,
+          y: 0,
+          label:
+            focus.branch?.interface.split("/").slice(1).join("/") ||
+            focus.branch?.interface ||
+            "—",
+          kind: "info",
+        },
+        {
+          id: "info:id",
+          x: 0,
+          y: 0,
+          label: t("topology.application_address"),
+          kind: "info",
+        },
+      ];
+    }
+    childCount = children.length;
+    const start =
+      Math.min(childPage, Math.max(0, Math.ceil(childCount / 12) - 1)) * 12;
+    const visible = children.slice(start, start + 12);
+    nodes.splice(0, nodes.length, center);
+    edges.splice(0, edges.length);
+    visible.forEach((child, i) => {
+      const angle = (2 * Math.PI * i) / visible.length - Math.PI / 2;
+      const positioned = {
+        ...child,
+        x: 500 + 300 * Math.cos(angle),
+        y: 390 + 270 * Math.sin(angle),
+      };
+      nodes.push(positioned);
+      edges.push({
+        a: center,
+        b: positioned,
+        inferred: focus.kind !== "local",
+      });
+    });
+  }
+  const choose = (n: N) => {
+    if (n.kind === "info") return;
+    setSelected(n);
+    if (n.id !== focus?.id) setTrail((history) => [...history, n]);
+    setChildPage(0);
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  };
+  const back = () => {
+    const history = trail.slice(0, -1);
+    setTrail(history);
+    setSelected(history.at(-1) || null);
+    setChildPage(0);
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  };
+  const overview = () => {
+    setTrail([]);
+    setSelected(null);
+    setChildPage(0);
+    setQuery("");
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  };
   const selectedInterface =
     selected?.branch?.interface ||
     (selected?.kind === "connection" ? selected.id : "");
@@ -92,11 +197,16 @@ export function TopologyPage() {
         title={t("topology.connection_graph")}
         extra={
           <Tag>
-            {branches.reduce((total, branch) => total + branch.count, 0)} {t("topology.destinations")}
+            {branches.reduce((total, branch) => total + branch.count, 0)}{" "}
+            {t("topology.destinations")}
           </Tag>
         }
       >
         <div className="topology-tools">
+          <Button disabled={!trail.length} onClick={back}>
+            {t("topology.back_level")}
+          </Button>
+          <Button onClick={overview}>{t("topology.full_graph")}</Button>
           <Input
             value={query}
             aria-label={t("topology.filter")}
@@ -104,6 +214,8 @@ export function TopologyPage() {
             onChange={(e) => {
               setQuery(e.target.value);
               setSelected(null);
+              setTrail([]);
+              setChildPage(0);
             }}
           />
           <Button onClick={() => setZoom((z) => Math.min(3, z * 1.25))}>
@@ -145,6 +257,43 @@ export function TopologyPage() {
           ))}
         </div>
         <p>{t("topology.guide")}</p>
+        {focus && (
+          <div className="topology-tools" aria-live="polite">
+            <strong>
+              {t("topology.centered_on")}: {focus.label}
+            </strong>
+            <span>
+              {childCount} {t("topology.items")}
+            </span>
+            {childCount > 12 && (
+              <>
+                <Button
+                  disabled={childPage === 0}
+                  onClick={() => setChildPage((p) => p - 1)}
+                >
+                  {t("routes.previous")}
+                </Button>
+                <span>
+                  {childPage + 1} / {Math.ceil(childCount / 12)}
+                </span>
+                <Button
+                  disabled={(childPage + 1) * 12 >= childCount}
+                  onClick={() => setChildPage((p) => p + 1)}
+                >
+                  {t("routes.next")}
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+        {focus?.kind === "address" && (
+          <div className="topology-tools">
+            <code style={{ overflowWrap: "anywhere" }}>{focus.address}</code>
+            <LinkButton to={`/routes/${focus.address}`}>
+              {t("routes.open_details")}
+            </LinkButton>
+          </div>
+        )}
         <svg
           className="topology-canvas"
           viewBox="0 0 1000 780"
@@ -195,8 +344,8 @@ export function TopologyPage() {
               <g
                 key={n.id}
                 transform={`translate(${n.x} ${n.y})`}
-                role="button"
-                tabIndex={0}
+                role={n.kind === "info" ? "note" : "button"}
+                tabIndex={n.kind === "info" ? -1 : 0}
                 aria-label={n.label}
                 onClick={() => choose(n)}
                 onKeyDown={(e) => {
@@ -209,7 +358,7 @@ export function TopologyPage() {
               >
                 <title>{n.label}</title>
                 <circle
-                  r={n.kind === "local" ? 40 : 26}
+                  r={n.id === focus?.id ? 48 : n.kind === "local" ? 40 : 26}
                   fill={
                     n.kind === "local"
                       ? "#78af9e"
@@ -229,12 +378,19 @@ export function TopologyPage() {
                       ? t("topology.local_short")
                       : n.kind === "connection"
                         ? n.label
-                        : t("topology.forward_short")}
+                        : n.kind === "address"
+                          ? "◎"
+                          : n.kind === "info"
+                            ? "i"
+                            : t("topology.forward_short")}
                 </text>
-                {(n.kind === "local" || n.kind === "connection") && (
+                {(n.kind === "local" ||
+                  n.kind === "connection" ||
+                  n.kind === "address" ||
+                  n.kind === "info") && (
                   <text
                     textAnchor="middle"
-                    y={n.kind === "local" ? 60 : 46}
+                    y={n.id === focus?.id ? 70 : n.kind === "local" ? 60 : 46}
                     fontSize="12"
                     fill="#504838"
                   >
@@ -247,7 +403,11 @@ export function TopologyPage() {
             ))}
           </g>
         </svg>
-        <p>{t("topology.interaction")}</p>
+        <p>
+          {focus?.kind === "address"
+            ? t("topology.address_properties")
+            : t("topology.interaction")}
+        </p>
         <p>{t("topology.line_legend")}</p>
         <p>{t("topology.limit_note")}</p>
         {!branches.length && <p>{t("topology.no_matching_paths")}</p>}
@@ -304,7 +464,7 @@ export function TopologyPage() {
             </p>
             <p>{t("topology.sample_limit")}</p>
             <ul className="topology-destinations">
-              {selected.branch.destinations.map((d: Data) => (
+              {selected.branch.destinations.slice(0, 30).map((d: Data) => (
                 <li key={d.hash}>
                   <a href={href(`/routes/${d.hash}`)}>
                     <code>{d.hash}</code>
