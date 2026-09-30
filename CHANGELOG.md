@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Implement an encrypted Matrix ↔ LXMF text bridge with persistent identity, explicit recipient commands and reply routing, durable queues, bounded retries, message deduplication and live worker status. Add pause/resume, queued test delivery and retry controls.
+
 - Centre selected topology nodes and expand their children in the graph, with full destination pagination and back navigation.
 - Clarify bridge implementation limits and configuration state; Reticulum being running no longer implies a bridge worker is running.
 

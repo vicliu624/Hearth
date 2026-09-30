@@ -8,9 +8,19 @@
     <h1>{{ bridge.label }}</h1>
     <p class="page-subtitle">{{ bridge.transport }} - {{ t("bridges." ~ bridge.transport ~ "_summary") if bridge.transport in ["matrix", "mqtt", "webhook"] else bridge.summary }}</p>
   </div>
-  <div class="hero-meta-pill">{{ t("bridges.test_only" if bridge.transport == "webhook" else "bridges.not_implemented") }}</div>
+  <div class="hero-meta-pill">{{ tv(bridge.status) if bridge.implementation|default("") == "matrix_lxmf" else t("bridges.matrix_unconfigured" if bridge.transport == "matrix" else "bridges.test_only" if bridge.transport == "webhook" else "bridges.not_implemented") }}</div>
 </section>
 
+{% if bridge.implementation|default("") == "matrix_lxmf" %}
+<section class="panel"><h2>{{ t("bridges.matrix_details") }}</h2>
+<p>{{ t("bridges.matrix_help") }}</p><p>{{ t("bridges.encryption_boundary") }}</p>
+<dl class="system-grid">
+<dt>{{ t("bridges.bot_account") }}</dt><dd>{{ bridge.worker.bot_user|default('-') }}</dd>
+<dt>{{ t("bridges.room_id") }}</dt><dd><code>{{ bridge.worker.room_id|default('-') }}</code></dd>
+<dt>{{ t("bridges.lxmf_address") }}</dt><dd><code>{{ bridge.worker.lxmf_address|default('-') }}</code></dd>
+{% for key, label in [('pending','queue_pending'),('delivered','queue_delivered'),('failed','queue_failed'),('awaiting_keys','queue_keys')] %}
+<dt>{{ t("bridges." ~ label) }}</dt><dd>{{ bridge.worker.get('queue',{}).get(key,0) }}</dd>{% endfor %}
+</dl></section>{% endif %}
 <section class="dashboard-grid">
   <section class="panel">
     <div class="panel-header"><div><h2>{{ t("bridges.detail") }}</h2></div></div>
@@ -18,8 +28,8 @@
       <dt>{{ t("field.name") }}</dt><dd>{{ bridge.name }}</dd>
       <dt>{{ t("bridges.plugin") }}</dt><dd>{{ bridge.plugin_name }}</dd>
       <dt>{{ t("field.transport") }}</dt><dd>{{ bridge.transport }}</dd>
-      <dt>{{ t("field.status") }}</dt><dd>{{ t("bridges.test_only" if bridge.transport == "webhook" else "bridges.not_implemented") }}</dd>
-      <dt>{{ t("field.health") }}</dt><dd>{{ t("bridges.not_monitored") }}</dd>
+      <dt>{{ t("field.status") }}</dt><dd>{{ tv(bridge.status) if bridge.implementation|default("") == "matrix_lxmf" else t("bridges.matrix_unconfigured" if bridge.transport == "matrix" else "bridges.test_only" if bridge.transport == "webhook" else "bridges.not_implemented") }}</dd>
+      <dt>{{ t("field.health") }}</dt><dd>{{ tv(bridge.health) if bridge.implementation|default("") == "matrix_lxmf" else t("bridges.not_monitored") }}</dd>
       <dt>{{ t("field.endpoint") }}</dt><dd>{{ bridge.endpoint }}</dd>
       <dt>{{ t("field.mode") }}</dt><dd>{{ bridge.mode }}</dd>
       <dt>{{ t("field.source") }}</dt><dd>{{ bridge.source }}</dd>
@@ -31,7 +41,7 @@
     <div class="panel-header"><div><h2>{{ t("bridges.controls") }}</h2></div></div>
     <form method="post" action="{{ request.url.path }}" class="inline-form">
       {% for action in bridge.actions %}
-      <button type="submit" name="action" value="{{ action }}">{{ t("bridges.action_" ~ action) }}</button>
+      <button type="submit" name="action" value="{{ action }}">{{ t("bridges.matrix_pause" if action == "disable" else "bridges.matrix_resume") if bridge.implementation|default("") == "matrix_lxmf" and action in ["enable","disable"] else t("bridges.action_" ~ action) }}</button>
       {% endfor %}
       {% if plugin_href %}
       <a class="button-link" href="{{ plugin_href }}">{{ t("bridges.open_plugin") }}</a>
@@ -88,7 +98,7 @@
         <tr>
           <td>{{ t("bridges.check_" ~ check.name) }}</td>
           <td><span class="status-chip status-chip--{{ check.tone }}">{{ tv(check.status) }}</span></td>
-          <td>{{ check.detail }}</td>
+          <td>{{ t("bridges.check_" ~ check.name ~ "_" ~ check.status) }}</td>
         </tr>
         {% else %}
         <tr><td colspan="3">-</td></tr>

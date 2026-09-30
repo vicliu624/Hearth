@@ -34,6 +34,7 @@ dev = [
   "pytest>=9.1.1,<10",
 ]
 reticulum = ["rns>=1.5.5,<2"]
+matrix_bridge = ["matrix-nio[e2e]==0.26.0", "lxmf==1.1.1"]
 
 [project.scripts]
 hearth = "hearth.cli.main:main"

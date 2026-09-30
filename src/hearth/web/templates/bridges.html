@@ -63,8 +63,8 @@
           <span class="muted">{{ bridge.plugin_name }}</span>
         </td>
         <td>{{ bridge.transport }}</td>
-        <td><span class="status-chip status-chip--{{ bridge.tone }}">{{ t("bridges.test_only" if bridge.transport == "webhook" else "bridges.not_implemented") }}</span></td>
-        <td>{{ t("bridges.not_monitored") }}</td>
+        <td><span class="status-chip status-chip--{{ bridge.tone }}">{{ tv(bridge.status) if bridge.implementation|default("") == "matrix_lxmf" else t("bridges.matrix_unconfigured" if bridge.transport == "matrix" else "bridges.test_only" if bridge.transport == "webhook" else "bridges.not_implemented") }}</span></td>
+        <td>{{ tv(bridge.health) if bridge.implementation|default("") == "matrix_lxmf" else t("bridges.not_monitored") }}</td>
         <td>{{ t("bridges.configured_yes" if bridge.configured else "bridges.not_configured") }}</td>
         <td>{{ bridge.endpoint }}</td>
         <td>{{ bridge.mode }}</td>

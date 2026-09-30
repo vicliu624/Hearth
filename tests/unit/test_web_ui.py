@@ -682,7 +682,7 @@ signature_required = true
     assert "Recent operations" in detail_page.text
     assert "Test delivery" in detail_page.text
     assert "Disable configuration" in detail_page.text
-    assert "Forwarding not implemented" in detail_page.text
+    assert "Bridge worker not configured" in detail_page.text
     assert sync_page.status_code == 200
     assert "Bridge operation completed." in sync_page.text
     assert "Signature verification" in sync_page.text

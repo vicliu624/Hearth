@@ -1,0 +1,25 @@
+[Unit]
+Description=Hearth encrypted Matrix to LXMF bridge
+After=network-online.target hearth.service
+Wants=network-online.target hearth.service
+ConditionPathExists=/var/lib/hearth/matrix-bridge/credentials.json
+
+[Service]
+Type=simple
+User=hearth
+Group=hearth
+WorkingDirectory=/var/lib/hearth/matrix-bridge
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/hearth/current/src
+ExecStart=/opt/hearth/matrix-bridge-venv/bin/python -m hearth.bridges.matrix_lxmf --config /var/lib/hearth/matrix-bridge/credentials.json
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/hearth/matrix-bridge /var/lib/hearth/reticulum
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

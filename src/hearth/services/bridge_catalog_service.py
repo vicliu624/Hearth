@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from time import perf_counter
+from time import perf_counter, time
+from pathlib import Path
+import psutil
 from typing import Any
 from urllib import error as urllib_error
 from urllib import request as urllib_request
@@ -54,13 +56,40 @@ class BridgeCatalogService:
                 return plugin
         return None
 
+    def _matrix_worker(self) -> dict[str, Any]:
+        path = self.plugin_service.settings.data_dir / "matrix-bridge" / "status.json"
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+            process = psutil.Process(int(state["pid"]))
+            command = process.cmdline()
+            live = (
+                abs(process.create_time() - float(state["process_started_at"])) < 1
+                and "hearth.bridges.matrix_lxmf" in command
+                and 0 <= time() - float(state["updated_at"]) < 90
+            )
+            if not live:
+                return {"status": "stopped", "error": "worker_not_running"}
+            return state
+        except (OSError, ValueError, KeyError, TypeError, psutil.Error):
+            return {"status": "stopped", "error": "worker_not_running"}
+
     def _status_for_bridge(self, enabled: bool, runtime_status: str) -> tuple[str, str]:
-        status = "idle" if enabled else "disabled"  # Config state is not proof of a bridge worker.
-        health = "healthy" if status == "running" else "warning" if enabled else "disabled"
+        status = (
+            "idle" if enabled else "disabled"
+        )  # Config state is not proof of a bridge worker.
+        health = (
+            "healthy" if status == "running" else "warning" if enabled else "disabled"
+        )
         return status, health
 
     def _endpoint_for_config(self, config: dict[str, Any]) -> str:
-        return str(config.get("endpoint") or config.get("url") or config.get("server") or config.get("topic") or "-")
+        return str(
+            config.get("endpoint")
+            or config.get("url")
+            or config.get("server")
+            or config.get("topic")
+            or "-"
+        )
 
     def _actions_for_bridge(self, configured: bool, enabled: bool) -> list[str]:
         actions = ["sync"]
@@ -69,14 +98,18 @@ class BridgeCatalogService:
             actions.append("test_delivery")
         return actions
 
-    def _transport_configuration_check(self, transport: str, config: dict[str, Any]) -> tuple[str, str]:
+    def _transport_configuration_check(
+        self, transport: str, config: dict[str, Any]
+    ) -> tuple[str, str]:
         if transport == "matrix":
             if str(config.get("server") or config.get("url") or "").strip():
                 return "healthy", "Matrix homeserver is configured."
             return "error", "Matrix homeserver is missing."
         if transport == "mqtt":
             has_server = bool(str(config.get("server") or "").strip())
-            has_topic = bool(str(config.get("topic") or config.get("endpoint") or "").strip())
+            has_topic = bool(
+                str(config.get("topic") or config.get("endpoint") or "").strip()
+            )
             if has_server and has_topic:
                 return "healthy", "MQTT broker and topic are configured."
             if has_server or has_topic:
@@ -94,7 +127,9 @@ class BridgeCatalogService:
         enabled = bool(bridge.get("enabled"))
         source_details = dict(bridge.get("source_details") or {})
         endpoint = str(bridge.get("endpoint") or "-")
-        transport_status, transport_detail = self._transport_configuration_check(str(bridge.get("transport") or ""), dict(bridge.get("config") or {}))
+        transport_status, transport_detail = self._transport_configuration_check(
+            str(bridge.get("transport") or ""), dict(bridge.get("config") or {})
+        )
         signature_status = str(source_details.get("signature_status") or "not_required")
         if signature_status in {"verified", "trusted"}:
             source_status = "healthy"
@@ -104,7 +139,10 @@ class BridgeCatalogService:
             source_detail = "A signature is required but was not present."
         elif signature_status == "invalid":
             source_status = "error"
-            source_detail = str(source_details.get("sync_error") or "Source signature validation failed.")
+            source_detail = str(
+                source_details.get("sync_error")
+                or "Source signature validation failed."
+            )
         elif signature_status == "not_required" and configured:
             source_status = "warning"
             source_detail = "Source verification has not been completed yet."
@@ -114,36 +152,69 @@ class BridgeCatalogService:
         checks.append(
             {
                 "name": "plugin_enabled",
-                "status": "healthy" if enabled else ("disabled" if configured else "warning"),
-                "detail": "Bridge plugin is enabled." if enabled else ("Bridge plugin is currently disabled." if configured else "Bridge plugin is not configured."),
+                "status": "healthy"
+                if enabled
+                else ("disabled" if configured else "warning"),
+                "detail": "Bridge plugin is enabled."
+                if enabled
+                else (
+                    "Bridge plugin is currently disabled."
+                    if configured
+                    else "Bridge plugin is not configured."
+                ),
             }
         )
         checks.append(
             {
                 "name": "runtime_ready",
-                "status": "healthy" if bridge.get("status") == "running" else ("warning" if enabled else "disabled"),
+                "status": "healthy"
+                if bridge.get("status") == "running"
+                else ("warning" if enabled else "disabled"),
                 "detail": "Reticulum runtime is available for bridge delivery."
                 if bridge.get("status") == "running"
-                else ("Runtime is not active enough for live delivery." if enabled else "Bridge runtime is disabled."),
+                else (
+                    "Runtime is not active enough for live delivery."
+                    if enabled
+                    else "Bridge runtime is disabled."
+                ),
             }
         )
-        checks.append({"name": "source_trust", "status": source_status, "detail": source_detail})
+        checks.append(
+            {"name": "source_trust", "status": source_status, "detail": source_detail}
+        )
         checks.append(
             {
                 "name": "endpoint_configured",
-                "status": "healthy" if endpoint != "-" else ("error" if configured else "disabled"),
-                "detail": "A delivery endpoint is configured." if endpoint != "-" else "No delivery endpoint is configured.",
+                "status": "healthy"
+                if endpoint != "-"
+                else ("error" if configured else "disabled"),
+                "detail": "A delivery endpoint is configured."
+                if endpoint != "-"
+                else "No delivery endpoint is configured.",
             }
         )
-        checks.append({"name": "transport_config", "status": transport_status, "detail": transport_detail})
+        checks.append(
+            {
+                "name": "transport_config",
+                "status": transport_status,
+                "detail": transport_detail,
+            }
+        )
         return checks
 
-    def _recent_operations_for_bridge(self, bridge_name: str, plugin_name: str, *, limit: int = 8) -> list[dict[str, Any]]:
-        recent = self.database.list_events(limit=max(limit * 8, 40), source="bridge_service")
+    def _recent_operations_for_bridge(
+        self, bridge_name: str, plugin_name: str, *, limit: int = 8
+    ) -> list[dict[str, Any]]:
+        recent = self.database.list_events(
+            limit=max(limit * 8, 40), source="bridge_service"
+        )
         operations: list[dict[str, Any]] = []
         for event in recent:
             payload = dict(event.get("payload") or {})
-            if payload.get("bridge") not in {bridge_name, plugin_name} and payload.get("plugin_name") != plugin_name:
+            if (
+                payload.get("bridge") not in {bridge_name, plugin_name}
+                and payload.get("plugin_name") != plugin_name
+            ):
                 continue
             operations.append(
                 {
@@ -170,7 +241,13 @@ class BridgeCatalogService:
         detail: str | None = None,
         result: dict[str, Any] | None = None,
     ) -> None:
-        severity = "info" if status in {"healthy", "success"} else "warning" if status == "warning" else "error"
+        severity = (
+            "info"
+            if status in {"healthy", "success"}
+            else "warning"
+            if status == "warning"
+            else "error"
+        )
         self.database.record_event(
             event_type=f"bridge.{action}",
             message=message,
@@ -199,7 +276,11 @@ class BridgeCatalogService:
         }
 
     def _perform_webhook_delivery_test(self, bridge: dict[str, Any]) -> dict[str, Any]:
-        endpoint = str(bridge.get("config", {}).get("url") or bridge.get("config", {}).get("endpoint") or "").strip()
+        endpoint = str(
+            bridge.get("config", {}).get("url")
+            or bridge.get("config", {}).get("endpoint")
+            or ""
+        ).strip()
         if not endpoint:
             return {
                 "status": "error",
@@ -207,12 +288,22 @@ class BridgeCatalogService:
                 "detail": "Webhook endpoint is missing.",
                 "result": {"transport": "webhook", "mode": "live", "endpoint": None},
             }
-        timeout_seconds = max(int(bridge.get("config", {}).get("timeout_sec") or self.plugin_service.settings.alerts.delivery_timeout_sec or 5), 1)
+        timeout_seconds = max(
+            int(
+                bridge.get("config", {}).get("timeout_sec")
+                or self.plugin_service.settings.alerts.delivery_timeout_sec
+                or 5
+            ),
+            1,
+        )
         payload = self._build_test_payload(bridge)
         request = urllib_request.Request(
             endpoint,
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            headers={"Content-Type": "application/json; charset=utf-8", "User-Agent": "Hearth/bridge-test"},
+            headers={
+                "Content-Type": "application/json; charset=utf-8",
+                "User-Agent": "Hearth/bridge-test",
+            },
             method="POST",
         )
         start = perf_counter()
@@ -233,7 +324,12 @@ class BridgeCatalogService:
                         "body": body,
                     },
                 }
-        except (OSError, urllib_error.URLError, urllib_error.HTTPError, ValueError) as exc:
+        except (
+            OSError,
+            urllib_error.URLError,
+            urllib_error.HTTPError,
+            ValueError,
+        ) as exc:
             duration_ms = int((perf_counter() - start) * 1000)
             return {
                 "status": "error",
@@ -253,7 +349,11 @@ class BridgeCatalogService:
         if transport == "webhook":
             return self._perform_webhook_delivery_test(bridge)
         endpoint = str(bridge.get("endpoint") or "-")
-        detail = "Delivery endpoint is not configured." if endpoint == "-" else f"{transport.title()} delivery test currently validates configuration only."
+        detail = (
+            "Delivery endpoint is not configured."
+            if endpoint == "-"
+            else f"{transport.title()} delivery test currently validates configuration only."
+        )
         status = "warning" if endpoint != "-" else "error"
         return {
             "status": status,
@@ -292,7 +392,9 @@ class BridgeCatalogService:
             "status": status,
             "health": health,
             "transport": transport,
-            "summary": str(plugin.get("description") or summary_text) if plugin else summary_text,
+            "summary": str(plugin.get("description") or summary_text)
+            if plugin
+            else summary_text,
             "source": source_name,
             "endpoint": self._endpoint_for_config(config),
             "mode": str(config.get("mode") or "bridge"),
@@ -304,8 +406,29 @@ class BridgeCatalogService:
             "plugin": plugin,
             "source_details": source_details,
         }
+        if transport == "matrix" and config.get("mode") == "lxmf":
+            worker = self._matrix_worker()
+            bridge["implementation"] = "matrix_lxmf"
+            bridge["worker"] = worker
+            bridge["status"] = worker["status"] if enabled else "disabled"
+            bridge["health"] = (
+                "healthy"
+                if enabled
+                and worker["status"] == "running"
+                and not worker.get("error")
+                and not worker.get("queue", {}).get("failed")
+                and not worker.get("queue", {}).get("awaiting_keys")
+                else "warning"
+            )
+            bridge["actions"] = [
+                "disable" if enabled else "enable",
+                "test_delivery",
+                "retry_failed",
+            ]
         bridge["health_checks"] = self._health_checks_for_bridge(bridge)
-        bridge["recent_operations"] = self._recent_operations_for_bridge(bridge_name, plugin_name)
+        bridge["recent_operations"] = self._recent_operations_for_bridge(
+            bridge_name, plugin_name
+        )
         return bridge
 
     def list_bridges(self, runtime_status: str) -> list[dict[str, Any]]:
@@ -338,7 +461,9 @@ class BridgeCatalogService:
                     bridge_name=plugin_name,
                     label=plugin_name.replace("_", " ").title(),
                     transport=str(config.get("transport") or "bridge"),
-                    summary_text=str(plugin.get("description") or "Custom bridge plugin"),
+                    summary_text=str(
+                        plugin.get("description") or "Custom bridge plugin"
+                    ),
                     plugin=plugin,
                     runtime_status=runtime_status,
                 )
@@ -348,7 +473,10 @@ class BridgeCatalogService:
     def get_bridge(self, name: str, runtime_status: str) -> dict[str, Any] | None:
         candidate = name.strip().lower()
         for bridge in self.list_bridges(runtime_status):
-            if bridge["name"].lower() == candidate or bridge["plugin_name"].lower() == candidate:
+            if (
+                bridge["name"].lower() == candidate
+                or bridge["plugin_name"].lower() == candidate
+            ):
                 return bridge
         return None
 
@@ -389,6 +517,35 @@ class BridgeCatalogService:
 
         if not bridge.get("configured"):
             raise LookupError("bridge plugin not configured")
+
+        if bridge.get("implementation") == "matrix_lxmf" and normalized in {
+            "test_delivery",
+            "retry_failed",
+        }:
+            from hearth.bridges.store import BridgeStore
+            from uuid import uuid4
+
+            if normalized == "test_delivery" and (
+                not bridge["enabled"] or bridge["worker"]["status"] != "running"
+            ):
+                raise ValueError("Matrix bridge must be running before sending a test")
+            store = BridgeStore(
+                self.plugin_service.settings.data_dir
+                / "matrix-bridge"
+                / "queue.sqlite3"
+            )
+            if normalized == "test_delivery":
+                key = "test:" + uuid4().hex
+                store.enqueue(
+                    key,
+                    "matrix",
+                    "",
+                    "Hearth 桥接测试：此消息已通过加密 Matrix 房间发送。",
+                )
+                result = {"queued": True, "message_id": key}
+            else:
+                result = {"requeued": store.retry_failed()}
+            return {"bridge": bridge["name"], "action": normalized, "result": result}
 
         plugin_name = str(bridge.get("plugin_name") or "").strip()
         if normalized == "enable":
