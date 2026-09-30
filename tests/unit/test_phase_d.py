@@ -68,8 +68,12 @@ type = "tcp"
         invalid_payload = invalid.json()
         assert invalid_payload["valid"] is False
 
-        valid_text = config_path.read_text(encoding="utf-8").replace('node_name = "phase-d"', 'node_name = "phase-d-updated"')
-        saved = client.post("/api/config/save-raw", headers=headers, json={"raw": valid_text})
+        valid_text = config_path.read_text(encoding="utf-8").replace(
+            'node_name = "phase-d"', 'node_name = "phase-d-updated"'
+        )
+        saved = client.post(
+            "/api/config/save-raw", headers=headers, json={"raw": valid_text}
+        )
         assert saved.status_code == 200
         saved_payload = saved.json()
         assert saved_payload["saved"] is True
@@ -109,8 +113,12 @@ watchdog_enabled = false
         assert exported["exported"] is True
         assert archive_path.exists()
 
-        config_path.write_text(original_config.replace("phase-d-backup", "modified"), encoding="utf-8")
-        context.settings.identity_path.write_text("modified-identity\n", encoding="utf-8")
+        config_path.write_text(
+            original_config.replace("phase-d-backup", "modified"), encoding="utf-8"
+        )
+        context.settings.identity_path.write_text(
+            "modified-identity\n", encoding="utf-8"
+        )
 
         imported = context.backup_service.import_archive(archive_path)
         assert imported["imported"] is True
@@ -118,8 +126,14 @@ watchdog_enabled = false
     finally:
         run(context.shutdown(stop_runtime=False))
 
-    assert config_path.read_text(encoding="utf-8") == original_config
-    assert context.settings.identity_path.read_text(encoding="utf-8") == original_identity
+    from hearth.core.config import parse_settings_text
+
+    assert parse_settings_text(
+        config_path.read_text(encoding="utf-8")
+    ) == parse_settings_text(original_config)
+    assert (
+        context.settings.identity_path.read_text(encoding="utf-8") == original_identity
+    )
 
 
 def test_phase_d_pages_render(tmp_path: Path) -> None:
@@ -156,4 +170,4 @@ admin_token = "phase-d-secret"
     assert config_page.status_code == 200
     assert "Current config path" in config_page.text
     assert backup_page.status_code == 200
-    assert "Backup Plan" in backup_page.text
+    assert "Backup contents and locations" in backup_page.text

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from hearth.core.config import HearthSettings, InterfaceSettings
+from hearth.core.operations import atomic_write
 
 
 class RuntimeConfigBridge:
@@ -24,7 +24,9 @@ class RuntimeConfigBridge:
             rendered = str(value)
         return f"  {key} = {rendered}"
 
-    def _common_options(self, payload: dict[str, Any], *, enabled_key: str = "enabled") -> list[str]:
+    def _common_options(
+        self, payload: dict[str, Any], *, enabled_key: str = "enabled"
+    ) -> list[str]:
         lines = [self._line(enabled_key, payload.get("enabled", True))]
         for key in (
             "mode",
@@ -80,10 +82,18 @@ class RuntimeConfigBridge:
 
     def _render_tcp_interface(self, item: InterfaceSettings) -> list[str]:
         payload = item.model_dump(mode="python")
-        host = payload.get("host") or payload.get("target_host") or payload.get("remote")
-        port = payload.get("port") or payload.get("target_port") or payload.get("listen_port")
+        host = (
+            payload.get("host") or payload.get("target_host") or payload.get("remote")
+        )
+        port = (
+            payload.get("port")
+            or payload.get("target_port")
+            or payload.get("listen_port")
+        )
         listen_on = payload.get("listen_on") or payload.get("listen_ip")
-        server_mode = bool(listen_on or payload.get("server") or payload.get("device") and not host)
+        server_mode = bool(
+            listen_on or payload.get("server") or payload.get("device") and not host
+        )
         interface_type = "TCPServerInterface" if server_mode else "TCPClientInterface"
 
         lines = [f"  [[{item.name}]]", f"    type = {interface_type}"]
@@ -109,8 +119,15 @@ class RuntimeConfigBridge:
         lines = [f"  [[{item.name}]]", "    type = SerialInterface"]
         for option in self._common_options(payload):
             lines.append("  " + option)
-        lines.append("  " + self._line("port", payload.get("device") or payload.get("port")))
-        lines.append("  " + self._line("speed", int(payload.get("baudrate") or payload.get("speed") or 115200)))
+        lines.append(
+            "  " + self._line("port", payload.get("device") or payload.get("port"))
+        )
+        lines.append(
+            "  "
+            + self._line(
+                "speed", int(payload.get("baudrate") or payload.get("speed") or 115200)
+            )
+        )
         for key, default in (("databits", 8), ("parity", "none"), ("stopbits", 1)):
             lines.append("  " + self._line(key, payload.get(key, default)))
         return lines
@@ -120,7 +137,9 @@ class RuntimeConfigBridge:
         lines = [f"  [[{item.name}]]", "    type = RNodeInterface"]
         for option in self._common_options(payload):
             lines.append("  " + option)
-        lines.append("  " + self._line("port", payload.get("device") or payload.get("port")))
+        lines.append(
+            "  " + self._line("port", payload.get("device") or payload.get("port"))
+        )
         mapping = {
             "frequency": payload.get("frequency"),
             "bandwidth": payload.get("bandwidth"),
@@ -147,7 +166,9 @@ class RuntimeConfigBridge:
         if payload.get("command"):
             lines.append("  " + self._line("command", payload.get("command")))
         if payload.get("respawn_delay") is not None:
-            lines.append("  " + self._line("respawn_delay", payload.get("respawn_delay")))
+            lines.append(
+                "  " + self._line("respawn_delay", payload.get("respawn_delay"))
+            )
         return lines
 
     def render(self) -> str:
@@ -182,7 +203,7 @@ class RuntimeConfigBridge:
         self.settings.reticulum_config_path.mkdir(parents=True, exist_ok=True)
         target = self.settings.runtime_managed_config_path
         content = self.render()
-        target.write_text(content, encoding="utf-8")
+        atomic_write(target, content)
         return {
             "rendered": True,
             "config_dir": str(self.settings.reticulum_config_path),
@@ -192,4 +213,3 @@ class RuntimeConfigBridge:
 
 
 __all__ = ["RuntimeConfigBridge"]
-

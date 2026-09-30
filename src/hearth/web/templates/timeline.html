@@ -5,7 +5,7 @@
   <div>
     <p class="page-kicker">{{ t("nav.timeline") }}</p>
     <h1>{{ t("page.timeline") }}</h1>
-    <p class="page-subtitle">{{ timeline.total }} {{ t("timeline.total_events") }} · {{ timeline.bucket_count }} {{ t("timeline.time_buckets") }}</p>
+    <p class="page-subtitle">{{ timeline.total }} {{ t("timeline.total_events") }} · {{ t("count.intervals", count=timeline.bucket_count) }}</p>
   </div>
   <div class="hero-meta-pill"><a class="inline-link" href="{{ logs_href }}">{{ t("nav.logs") }}</a></div>
 </section>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable
 
 
@@ -25,7 +26,12 @@ class AsyncScheduler:
                 await asyncio.sleep(interval_seconds)
                 if not self._running:
                     break
-                await job()
+                try:
+                    await job()
+                except Exception:
+                    logging.getLogger(__name__).exception(
+                        "Scheduled job %s failed; retrying next interval", name
+                    )
 
         self._tasks.append(asyncio.create_task(runner(), name=f"scheduler:{name}"))
 
@@ -34,8 +40,9 @@ class AsyncScheduler:
 
     async def stop(self) -> None:
         self._running = False
-        for task in self._tasks:
+        tasks = [task for task in self._tasks if task is not asyncio.current_task()]
+        for task in tasks:
             task.cancel()
-        if self._tasks:
-            await asyncio.gather(*self._tasks, return_exceptions=True)
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         self._tasks.clear()

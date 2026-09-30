@@ -42,10 +42,10 @@ The deployment script defaults to:
 
 That means:
 
-- if `rnsd` or `RNS.Utilities.rnsd` is available, the config uses `managed_rnsd`
-- otherwise the config falls back to `mock_process`
+- the normal installer includes the Reticulum extra, so new auto-mode deployments use `managed_rnsd`
+- use `--backend mock_process` explicitly for a simulation; existing configuration is preserved unless replacement is requested
 
-This makes the Web console come up reliably even on hosts that do not yet have Reticulum installed.
+The managed backend requires Reticulum in Hearth's Python environment. A simulation is always labeled as such in the console.
 
 If you want to force a real Reticulum runtime, install Reticulum first and then run:
 

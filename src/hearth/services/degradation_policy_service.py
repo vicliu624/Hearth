@@ -16,13 +16,24 @@ class DegradationPolicyService:
         self.settings = settings
 
     def evaluate(self, summary: dict[str, Any]) -> dict[str, Any]:
+        if summary.get("desired_state") == "stopped":
+            return {
+                "mode": "stopped",
+                "reasons": ["operator_requested_stop"],
+                "actions": [],
+                "active_interfaces": 0,
+                "unhealthy_interfaces": 0,
+            }
         interfaces = list(summary.get("interfaces") or [])
         enabled_interfaces = [item for item in interfaces if item.get("enabled")]
-        active_interfaces = [item for item in enabled_interfaces if item.get("status") == "running"]
+        active_interfaces = [
+            item for item in enabled_interfaces if item.get("status") == "running"
+        ]
         unhealthy_interfaces = [
             item
             for item in enabled_interfaces
-            if item.get("status") in FAILED_INTERFACE_STATUS or item.get("health_status") in CRITICAL_INTERFACE_HEALTH
+            if item.get("status") in FAILED_INTERFACE_STATUS
+            or item.get("health_status") in CRITICAL_INTERFACE_HEALTH
         ]
         actions: list[dict[str, Any]] = []
         mode = "normal"
@@ -42,7 +53,11 @@ class DegradationPolicyService:
                 }
             )
 
-        active_primary = [item for item in active_interfaces if str(item.get("role") or "").strip().lower() in PRIMARY_ROLES]
+        active_primary = [
+            item
+            for item in active_interfaces
+            if str(item.get("role") or "").strip().lower() in PRIMARY_ROLES
+        ]
         if not active_interfaces and enabled_interfaces:
             mode = "interface_failover"
             reasons.append("no_active_interfaces")
@@ -93,8 +108,13 @@ class DegradationPolicyService:
             reasons.append("multiple_interfaces_unhealthy")
 
         deduplicated: dict[tuple[str, str], dict[str, Any]] = {}
-        for action in sorted(actions, key=lambda item: int(item.get("priority") or 0), reverse=True):
-            key = (str(action.get("action") or ""), str(action.get("target_name") or ""))
+        for action in sorted(
+            actions, key=lambda item: int(item.get("priority") or 0), reverse=True
+        ):
+            key = (
+                str(action.get("action") or ""),
+                str(action.get("target_name") or ""),
+            )
             deduplicated.setdefault(key, action)
 
         return {

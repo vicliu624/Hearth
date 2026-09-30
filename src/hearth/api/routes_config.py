@@ -9,7 +9,21 @@ from hearth.api.security import require_permission
 from hearth.core.lifecycle import ApplicationContext
 
 
-router = APIRouter(prefix="/api/config", tags=["config"], dependencies=[Depends(require_permission("configure"))])
+router = APIRouter(
+    prefix="/api/config",
+    tags=["config"],
+    dependencies=[Depends(require_permission("configure"))],
+)
+
+
+@router.get("/status")
+async def config_status(context: ApplicationContext = Depends(get_context)) -> dict:
+    return context.config_service.activation_status()
+
+
+@router.post("/apply")
+async def apply_config(context: ApplicationContext = Depends(get_context)) -> dict:
+    return await context.apply_configuration()
 
 
 @router.get("")
@@ -55,25 +69,37 @@ async def save_config_raw(
 
 
 @router.get("/revisions")
-async def list_config_revisions(context: ApplicationContext = Depends(get_context)) -> list[dict]:
+async def list_config_revisions(
+    context: ApplicationContext = Depends(get_context),
+) -> list[dict]:
     return context.config_version_service.list_revisions()
 
 
 @router.get("/revisions/{revision_id}")
-async def get_config_revision(revision_id: int, context: ApplicationContext = Depends(get_context)) -> dict | None:
+async def get_config_revision(
+    revision_id: int, context: ApplicationContext = Depends(get_context)
+) -> dict | None:
     return context.config_version_service.get_revision(revision_id)
 
 
 @router.get("/revisions/{revision_id}/compare")
-async def compare_config_revision(revision_id: int, context: ApplicationContext = Depends(get_context)) -> dict | None:
+async def compare_config_revision(
+    revision_id: int, context: ApplicationContext = Depends(get_context)
+) -> dict | None:
     return context.config_version_service.compare_with_current(revision_id)
 
 
 @router.post("/revisions/{revision_id}/restore")
-async def restore_config_revision(revision_id: int, context: ApplicationContext = Depends(get_context)) -> dict:
+async def restore_config_revision(
+    revision_id: int, context: ApplicationContext = Depends(get_context)
+) -> dict:
     revision = context.config_version_service.get_revision(revision_id)
     if revision is None:
-        return {"restored": False, "revision_id": revision_id, "error": "revision not found"}
+        return {
+            "restored": False,
+            "revision_id": revision_id,
+            "error": "revision not found",
+        }
     result = context.config_service.save_raw(
         revision["raw_text"],
         source="restore",

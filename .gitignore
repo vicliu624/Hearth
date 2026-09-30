@@ -33,3 +33,6 @@ tmp-*/
 .vscode/
 .DS_Store
 Thumbs.db
+*.active.toml
+node_modules/
+tmp-*.zip

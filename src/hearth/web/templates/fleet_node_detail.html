@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 
 {% block content %}
 <section class="page-hero">
@@ -25,7 +25,7 @@
   <article class="metric-card">
     <p class="metric-card__eyebrow">{{ t("field.uptime") }}</p>
     <h2>{{ node.uptime_seconds }}</h2>
-    <p class="metric-card__subtext">seconds</p>
+    <p class="metric-card__subtext">{{ t('field.seconds') }}</p>
   </article>
   <article class="metric-card">
     <p class="metric-card__eyebrow">{{ t("field.version") }}</p>

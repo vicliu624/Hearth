@@ -12,13 +12,13 @@
 
 <section class="metric-grid metric-grid--4">
   <article class="metric-card">
-    <p class="metric-card__eyebrow">RX Packets</p>
-    <h2>{{ traffic_snapshot.rx_packets }}</h2>
+    <p class="metric-card__eyebrow">{{ t('field.rx_bytes') }}</p>
+    <h2>{{ traffic_snapshot.rx_bytes }}</h2>
     <p class="metric-card__subtext">{{ t("metrics.traffic_window") }}</p>
   </article>
   <article class="metric-card">
-    <p class="metric-card__eyebrow">TX Packets</p>
-    <h2>{{ traffic_snapshot.tx_packets }}</h2>
+    <p class="metric-card__eyebrow">{{ t('field.tx_bytes') }}</p>
+    <h2>{{ traffic_snapshot.tx_bytes }}</h2>
     <p class="metric-card__subtext">{{ t("metrics.traffic_window") }}</p>
   </article>
   <article class="metric-card">
@@ -92,8 +92,8 @@
           <th>{{ t("field.name") }}</th>
           <th>{{ t("field.type") }}</th>
           <th>{{ t("field.status") }}</th>
-          <th>RX</th>
-          <th>TX</th>
+          <th>{{ t('field.rx_bytes') }}</th>
+          <th>{{ t('field.tx_bytes') }}</th>
           <th>{{ t("dashboard.errors") }}</th>
           <th>{{ t("field.last_seen") }}</th>
         </tr>
@@ -104,8 +104,8 @@
           <td>{{ interface.name }}</td>
           <td>{{ interface.type }}</td>
           <td><span class="status-chip status-chip--{{ interface.tone }}">{{ tv(interface.status) }}</span></td>
-          <td>{{ interface.rx_packets_display }}</td>
-          <td>{{ interface.tx_packets_display }}</td>
+          <td>{{ interface.rx_bytes_display }}</td>
+          <td>{{ interface.tx_bytes_display }}</td>
           <td>{{ interface.error_count_display }}</td>
           <td>{{ tr(interface.last_seen_at) }}</td>
         </tr>

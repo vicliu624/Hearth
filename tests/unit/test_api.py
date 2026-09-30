@@ -32,7 +32,9 @@ class _AlertWebhookHandler(BaseHTTPRequestHandler):
         return
 
 
-def _build_signed_source_manifest(label: str, description: str, plugins: list[str]) -> tuple[dict, str, str]:
+def _build_signed_source_manifest(
+    label: str, description: str, plugins: list[str]
+) -> tuple[dict, str, str]:
     public_key = f"ed25519:{public_key_from_seed(TEST_SOURCE_SEED).hex()}"
     payload = {
         "label": label,
@@ -41,7 +43,9 @@ def _build_signed_source_manifest(label: str, description: str, plugins: list[st
         "public_key": public_key,
         "signature_algorithm": "ed25519",
     }
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    canonical = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
     digest = hashlib.sha256(canonical).hexdigest()
     payload["signature"] = f"ed25519:{sign(TEST_SOURCE_SEED, canonical).hex()}"
     return payload, public_key, digest
@@ -140,7 +144,9 @@ admin_token = "api-secret"
     app = create_app(settings_path=config_path)
     with TestClient(app) as client:
         unauthorized = client.post("/api/node/start")
-        authorized = client.post("/api/node/start", headers={"X-Hearth-Token": "api-secret"})
+        authorized = client.post(
+            "/api/node/start", headers={"X-Hearth-Token": "api-secret"}
+        )
 
     assert unauthorized.status_code == 401
     assert authorized.status_code == 200
@@ -183,8 +189,13 @@ def test_network_access_helpers() -> None:
     assert classify_client_host("8.8.8.8") == "public"
 
     assert is_client_host_allowed("127.0.0.1", allow_lan=False, allow_wan=False) is True
-    assert is_client_host_allowed("192.168.50.10", allow_lan=True, allow_wan=False) is True
-    assert is_client_host_allowed("192.168.50.10", allow_lan=False, allow_wan=False) is False
+    assert (
+        is_client_host_allowed("192.168.50.10", allow_lan=True, allow_wan=False) is True
+    )
+    assert (
+        is_client_host_allowed("192.168.50.10", allow_lan=False, allow_wan=False)
+        is False
+    )
     assert is_client_host_allowed("8.8.8.8", allow_lan=True, allow_wan=False) is False
     assert is_client_host_allowed("8.8.8.8", allow_lan=True, allow_wan=True) is True
 
@@ -220,14 +231,17 @@ port = 4242
     with TestClient(app) as client:
         routes_payload = client.get("/api/routes").json()
         announces_payload = client.get("/api/announces").json()
-        route_detail = client.get(f"/api/routes/{routes_payload[0]['destination_hash']}")
+        route_detail = client.get(
+            f"/api/routes/{routes_payload[0]['destination_hash']}"
+        )
         announce_detail = client.get(f"/api/announces/{announces_payload[0]['id']}")
 
     assert route_detail.status_code == 200
-    assert route_detail.json()["destination_hash"] == routes_payload[0]["destination_hash"]
+    assert (
+        route_detail.json()["destination_hash"] == routes_payload[0]["destination_hash"]
+    )
     assert announce_detail.status_code == 200
     assert announce_detail.json()["id"] == announces_payload[0]["id"]
-
 
 
 def test_metrics_and_audit_endpoints(tmp_path: Path) -> None:
@@ -266,9 +280,11 @@ port = 4242
         audit_response = client.get("/api/audit?token=metrics-secret&search=node")
 
     assert metrics_response.status_code == 200
-    assert metrics_response.headers["content-type"].startswith("text/plain; version=0.0.4")
+    assert metrics_response.headers["content-type"].startswith(
+        "text/plain; version=0.0.4"
+    )
     assert "hearth_runtime_up" in metrics_response.text
-    assert "hearth_interface_rx_packets_total" in metrics_response.text
+    assert "hearth_interface_rx_bytes_total" in metrics_response.text
     assert audit_response.status_code == 200
     payload = audit_response.json()
     assert any(item["event_type"].startswith("node.") for item in payload)
@@ -314,16 +330,25 @@ port = 4242
         created_token = client.post(
             "/api/security/tokens",
             headers={"X-Hearth-Token": "security-secret"},
-            json={"token_name": "alice-ops", "owner_username": "alice", "role": "operator", "scopes": ["read", "operate"]},
+            json={
+                "token_name": "alice-ops",
+                "owner_username": "alice",
+                "role": "operator",
+                "scopes": ["read", "operate"],
+            },
         )
-        roles_response = client.get("/api/security/roles", headers={"X-Hearth-Token": "security-secret"})
+        roles_response = client.get(
+            "/api/security/roles", headers={"X-Hearth-Token": "security-secret"}
+        )
         maintenance_update = client.post(
             "/api/maintenance",
             headers={"X-Hearth-Token": "security-secret"},
             json={"enabled": True, "reason": "upgrade", "until_hours": 2},
         )
         issued_token = created_token.json()["token"]
-        maintenance_state = client.get("/api/maintenance", headers={"X-Hearth-Token": issued_token})
+        maintenance_state = client.get(
+            "/api/maintenance", headers={"X-Hearth-Token": issued_token}
+        )
 
     assert created_user.status_code == 200
     assert created_user.json()["username"] == "alice"
@@ -336,7 +361,6 @@ port = 4242
     assert maintenance_update.json()["enabled"] is True
     assert maintenance_state.status_code == 200
     assert maintenance_state.json()["enabled"] is True
-
 
 
 def test_plugin_and_service_endpoints(tmp_path: Path) -> None:
@@ -404,20 +428,31 @@ signature_required = true
 
     app = create_app(settings_path=config_path)
     with TestClient(app) as client:
-        plugins_response = client.get("/api/plugins", headers={"X-Hearth-Token": "plugin-secret"})
-        sources_response = client.get("/api/plugins/sources", headers={"X-Hearth-Token": "plugin-secret"})
+        plugins_response = client.get(
+            "/api/plugins", headers={"X-Hearth-Token": "plugin-secret"}
+        )
+        sources_response = client.get(
+            "/api/plugins/sources", headers={"X-Hearth-Token": "plugin-secret"}
+        )
         refresh_sources_response = client.post(
             "/api/plugins/sources/refresh",
             headers={"X-Hearth-Token": "plugin-secret"},
         )
-        plugin_detail = client.get("/api/plugins/matrix_bridge", headers={"X-Hearth-Token": "plugin-secret"})
+        plugin_detail = client.get(
+            "/api/plugins/matrix_bridge", headers={"X-Hearth-Token": "plugin-secret"}
+        )
         plugin_update = client.post(
             "/api/plugins/metrics_exporter",
             headers={"X-Hearth-Token": "plugin-secret"},
             json={"enabled": True},
         )
-        services_response = client.get("/api/services", headers={"X-Hearth-Token": "plugin-secret"})
-        service_detail = client.get("/api/services/reticulum_runtime", headers={"X-Hearth-Token": "plugin-secret"})
+        services_response = client.get(
+            "/api/services", headers={"X-Hearth-Token": "plugin-secret"}
+        )
+        service_detail = client.get(
+            "/api/services/reticulum_runtime",
+            headers={"X-Hearth-Token": "plugin-secret"},
+        )
         service_action = client.post(
             "/api/services/observation_sync",
             headers={"X-Hearth-Token": "plugin-secret"},
@@ -434,12 +469,19 @@ signature_required = true
     assert sources_response.status_code == 200
     assert any(item["source"] == "community" for item in sources_response.json())
     assert any(item["source"] == "community_mirror" for item in sources_response.json())
-    assert any("available_count" in item and "index_url" in item for item in sources_response.json())
+    assert any(
+        "available_count" in item and "index_url" in item
+        for item in sources_response.json()
+    )
     assert refresh_sources_response.status_code == 200
     assert refresh_sources_response.json()["refreshed"] is True
     assert Path(refresh_sources_response.json()["index_path"]).exists()
     assert refresh_sources_response.json()["source_count"] >= 3
-    mirror_source = next(item for item in refresh_sources_response.json()["sources"] if item["source"] == "community_mirror")
+    mirror_source = next(
+        item
+        for item in refresh_sources_response.json()["sources"]
+        if item["source"] == "community_mirror"
+    )
     assert mirror_source["available_count"] == 3
     assert mirror_source["sync_state"] == "ready"
     assert mirror_source["sync_error"] is None
@@ -490,7 +532,11 @@ admin_token = "rbac-secret"
         client.post(
             "/api/security/users",
             headers={"X-Hearth-Token": "rbac-secret"},
-            json={"username": "viewer_user", "display_name": "Viewer", "role": "viewer"},
+            json={
+                "username": "viewer_user",
+                "display_name": "Viewer",
+                "role": "viewer",
+            },
         )
         client.post(
             "/api/security/users",
@@ -500,27 +546,44 @@ admin_token = "rbac-secret"
         viewer_token_response = client.post(
             "/api/security/tokens",
             headers={"X-Hearth-Token": "rbac-secret"},
-            json={"token_name": "viewer-token", "owner_username": "viewer_user", "role": "viewer", "scopes": ["read"]},
+            json={
+                "token_name": "viewer-token",
+                "owner_username": "viewer_user",
+                "role": "viewer",
+                "scopes": ["read"],
+            },
         )
         operator_token_response = client.post(
             "/api/security/tokens",
             headers={"X-Hearth-Token": "rbac-secret"},
-            json={"token_name": "ops-token", "owner_username": "ops_user", "role": "operator", "scopes": ["read", "operate"]},
+            json={
+                "token_name": "ops-token",
+                "owner_username": "ops_user",
+                "role": "operator",
+                "scopes": ["read", "operate"],
+            },
         )
 
         viewer_token = viewer_token_response.json()["token"]
         operator_token = operator_token_response.json()["token"]
 
-        viewer_start = client.post("/api/node/start", headers={"X-Hearth-Token": viewer_token})
-        operator_start = client.post("/api/node/start", headers={"X-Hearth-Token": operator_token})
-        operator_security = client.get("/api/security/users", headers={"X-Hearth-Token": operator_token})
-        operator_maintenance = client.get("/api/maintenance", headers={"X-Hearth-Token": operator_token})
+        viewer_start = client.post(
+            "/api/node/start", headers={"X-Hearth-Token": viewer_token}
+        )
+        operator_start = client.post(
+            "/api/node/start", headers={"X-Hearth-Token": operator_token}
+        )
+        operator_security = client.get(
+            "/api/security/users", headers={"X-Hearth-Token": operator_token}
+        )
+        operator_maintenance = client.get(
+            "/api/maintenance", headers={"X-Hearth-Token": operator_token}
+        )
 
     assert viewer_start.status_code == 403
     assert operator_start.status_code == 200
     assert operator_security.status_code == 403
     assert operator_maintenance.status_code == 200
-
 
 
 def test_fleet_and_config_revision_endpoints(tmp_path: Path) -> None:
@@ -549,11 +612,17 @@ admin_token = "fleet-secret"
 
     app = create_app(settings_path=config_path)
     with TestClient(app) as client:
-        overview = client.get("/api/fleet/overview", headers={"X-Hearth-Token": "fleet-secret"})
+        overview = client.get(
+            "/api/fleet/overview", headers={"X-Hearth-Token": "fleet-secret"}
+        )
         created_group = client.post(
             "/api/fleet/groups",
             headers={"X-Hearth-Token": "fleet-secret"},
-            json={"name": "community-core", "description": "Main shared nodes", "group_type": "community"},
+            json={
+                "name": "community-core",
+                "description": "Main shared nodes",
+                "group_type": "community",
+            },
         )
         created_node = client.post(
             "/api/fleet/nodes",
@@ -580,22 +649,42 @@ admin_token = "fleet-secret"
                 "target_nodes": ["relay-east"],
             },
         )
-        groups = client.get("/api/fleet/groups", headers={"X-Hearth-Token": "fleet-secret"})
-        nodes = client.get("/api/fleet/nodes", headers={"X-Hearth-Token": "fleet-secret"})
-        node_detail = client.get("/api/fleet/nodes/relay-east", headers={"X-Hearth-Token": "fleet-secret"})
-        templates = client.get("/api/fleet/templates", headers={"X-Hearth-Token": "fleet-secret"})
+        groups = client.get(
+            "/api/fleet/groups", headers={"X-Hearth-Token": "fleet-secret"}
+        )
+        nodes = client.get(
+            "/api/fleet/nodes", headers={"X-Hearth-Token": "fleet-secret"}
+        )
+        node_detail = client.get(
+            "/api/fleet/nodes/relay-east", headers={"X-Hearth-Token": "fleet-secret"}
+        )
+        templates = client.get(
+            "/api/fleet/templates", headers={"X-Hearth-Token": "fleet-secret"}
+        )
         tags = client.get("/api/fleet/tags", headers={"X-Hearth-Token": "fleet-secret"})
-        health = client.get("/api/fleet/health", headers={"X-Hearth-Token": "fleet-secret"})
-        events = client.get("/api/fleet/events", headers={"X-Hearth-Token": "fleet-secret"})
-        revisions_before = client.get("/api/config/revisions", headers={"X-Hearth-Token": "fleet-secret"})
-        raw_config = client.get("/api/config/raw", headers={"X-Hearth-Token": "fleet-secret"}).json()["raw"]
-        updated_raw = raw_config.replace('node_name = "fleet-node"', 'node_name = "fleet-node-v2"', 1)
+        health = client.get(
+            "/api/fleet/health", headers={"X-Hearth-Token": "fleet-secret"}
+        )
+        events = client.get(
+            "/api/fleet/events", headers={"X-Hearth-Token": "fleet-secret"}
+        )
+        revisions_before = client.get(
+            "/api/config/revisions", headers={"X-Hearth-Token": "fleet-secret"}
+        )
+        raw_config = client.get(
+            "/api/config/raw", headers={"X-Hearth-Token": "fleet-secret"}
+        ).json()["raw"]
+        updated_raw = raw_config.replace(
+            'node_name = "fleet-node"', 'node_name = "fleet-node-v2"', 1
+        )
         saved = client.post(
             "/api/config/save-raw",
             headers={"X-Hearth-Token": "fleet-secret"},
             json={"raw": updated_raw},
         )
-        revisions_after = client.get("/api/config/revisions", headers={"X-Hearth-Token": "fleet-secret"})
+        revisions_after = client.get(
+            "/api/config/revisions", headers={"X-Hearth-Token": "fleet-secret"}
+        )
         compare = client.get(
             f"/api/config/revisions/{revisions_after.json()[0]['id']}/compare",
             headers={"X-Hearth-Token": "fleet-secret"},
@@ -604,7 +693,9 @@ admin_token = "fleet-secret"
             f"/api/config/revisions/{revisions_after.json()[-1]['id']}/restore",
             headers={"X-Hearth-Token": "fleet-secret"},
         )
-        raw_after_restore = client.get("/api/config/raw", headers={"X-Hearth-Token": "fleet-secret"})
+        raw_after_restore = client.get(
+            "/api/config/raw", headers={"X-Hearth-Token": "fleet-secret"}
+        )
         exported_backup = client.post(
             "/api/backup/export",
             headers={"X-Hearth-Token": "fleet-secret"},
@@ -630,7 +721,9 @@ admin_token = "fleet-secret"
     assert any(item["node_name"] == "relay-east" for item in nodes.json())
     assert node_detail.status_code == 200
     assert node_detail.json()["node_name"] == "relay-east"
-    assert any(item["name"] == "community-default" for item in node_detail.json()["templates"])
+    assert any(
+        item["name"] == "community-default" for item in node_detail.json()["templates"]
+    )
     assert templates.status_code == 200
     assert any(item["name"] == "community-default" for item in templates.json())
     assert tags.status_code == 200
@@ -656,7 +749,6 @@ admin_token = "fleet-secret"
     assert backup_detail.status_code == 200
     assert backup_detail.json()["archive_name"] == "fleet-backup.tar.gz"
     assert "manifest.json" in backup_detail.json()["included"]
-
 
 
 def test_bridge_alert_metrics_and_diagnostics_endpoints(tmp_path: Path) -> None:
@@ -707,8 +799,12 @@ config = { server = "https://matrix.example", mode = "hybrid" }
     with TestClient(app) as client:
         bridges = client.get("/api/bridges", headers={"X-Hearth-Token": "change-me"})
         alerts = client.get("/api/alerts", headers={"X-Hearth-Token": "change-me"})
-        metrics_summary = client.get("/api/metrics/summary", headers={"X-Hearth-Token": "change-me"})
-        diagnostics = client.get("/api/diagnostics", headers={"X-Hearth-Token": "change-me"})
+        metrics_summary = client.get(
+            "/api/metrics/summary", headers={"X-Hearth-Token": "change-me"}
+        )
+        diagnostics = client.get(
+            "/api/diagnostics", headers={"X-Hearth-Token": "change-me"}
+        )
 
     assert bridges.status_code == 200
     assert any(item["name"] == "matrix_bridge" for item in bridges.json())
@@ -779,7 +875,9 @@ signature_required = true
 
     app = create_app(settings_path=config_path)
     with TestClient(app) as client:
-        detail = client.get("/api/bridges/matrix_bridge", headers={"X-Hearth-Token": "bridge-secret"})
+        detail = client.get(
+            "/api/bridges/matrix_bridge", headers={"X-Hearth-Token": "bridge-secret"}
+        )
         sync = client.post(
             "/api/bridges/matrix_bridge",
             headers={"X-Hearth-Token": "bridge-secret"},
@@ -795,7 +893,9 @@ signature_required = true
             headers={"X-Hearth-Token": "bridge-secret"},
             json={"action": "disable"},
         )
-        updated_detail = client.get("/api/bridges/matrix_bridge", headers={"X-Hearth-Token": "bridge-secret"})
+        updated_detail = client.get(
+            "/api/bridges/matrix_bridge", headers={"X-Hearth-Token": "bridge-secret"}
+        )
 
     assert detail.status_code == 200
     assert detail.json()["plugin_name"] == "matrix_bridge"
@@ -815,9 +915,18 @@ signature_required = true
     assert disable.json()["action"] == "disable"
     assert disable.json()["state"]["enabled"] is False
     assert updated_detail.status_code == 200
-    assert any(item["action"] == "disable" for item in updated_detail.json()["recent_operations"])
-    assert any(item["action"] == "test_delivery" for item in updated_detail.json()["recent_operations"])
-    assert any(item["name"] == "source_trust" for item in updated_detail.json()["health_checks"])
+    assert any(
+        item["action"] == "disable"
+        for item in updated_detail.json()["recent_operations"]
+    )
+    assert any(
+        item["action"] == "test_delivery"
+        for item in updated_detail.json()["recent_operations"]
+    )
+    assert any(
+        item["name"] == "source_trust"
+        for item in updated_detail.json()["health_checks"]
+    )
 
 
 def test_bridge_webhook_delivery_records_history(tmp_path: Path) -> None:
@@ -889,7 +998,10 @@ signature_required = true
                 headers={"X-Hearth-Token": "bridge-secret"},
                 json={"action": "test_delivery"},
             )
-            detail = client.get("/api/bridges/webhook_bridge", headers={"X-Hearth-Token": "bridge-secret"})
+            detail = client.get(
+                "/api/bridges/webhook_bridge",
+                headers={"X-Hearth-Token": "bridge-secret"},
+            )
     finally:
         server.shutdown()
         thread.join(timeout=2)
@@ -902,8 +1014,12 @@ signature_required = true
     assert len(_AlertWebhookHandler.deliveries) == 1
     assert _AlertWebhookHandler.deliveries[0]["bridge"] == "webhook_bridge"
     assert detail.status_code == 200
-    assert any(item["action"] == "test_delivery" for item in detail.json()["recent_operations"])
-    assert any(item["name"] == "endpoint_configured" for item in detail.json()["health_checks"])
+    assert any(
+        item["action"] == "test_delivery" for item in detail.json()["recent_operations"]
+    )
+    assert any(
+        item["name"] == "endpoint_configured" for item in detail.json()["health_checks"]
+    )
 
 
 def test_alert_webhook_delivery_and_history(tmp_path: Path) -> None:
@@ -952,19 +1068,31 @@ port = 4242
 
         app = create_app(settings_path=config_path)
         with TestClient(app) as client:
+            client.portal.call(app.state.context.refresh_alerts)
+            delivered_before_read = len(_AlertWebhookHandler.deliveries)
             alerts = client.get("/api/alerts", headers={"X-Hearth-Token": "change-me"})
-            history = client.get("/api/alerts/history", headers={"X-Hearth-Token": "change-me"})
+            history = client.get(
+                "/api/alerts/history", headers={"X-Hearth-Token": "change-me"}
+            )
+            assert len(_AlertWebhookHandler.deliveries) == delivered_before_read
 
         assert alerts.status_code == 200
         assert alerts.json()["hooks"]["enabled"] is True
-        assert any(item["transition"] == "activated" for item in history.json()["history"])
+        assert any(
+            item["transition"] == "activated" for item in history.json()["history"]
+        )
         assert len(_AlertWebhookHandler.deliveries) >= 1
-        assert any(item.get("transition") == "activated" for item in _AlertWebhookHandler.deliveries)
-        assert any(row["event_type"] == "alert.hook_delivered" for row in history.json()["history"])
+        assert any(
+            item.get("transition") == "activated"
+            for item in _AlertWebhookHandler.deliveries
+        )
+        assert any(
+            row["event_type"] == "alert.hook_delivered"
+            for row in history.json()["history"]
+        )
     finally:
         server.shutdown()
         server.server_close()
-
 
 
 def test_topology_and_network_intelligence_endpoints(tmp_path: Path) -> None:
@@ -1005,21 +1133,37 @@ enabled = true
 
     app = create_app(settings_path=config_path)
     with TestClient(app) as client:
-        topology = client.get("/api/topology", headers={"X-Hearth-Token": "topology-secret"})
-        network_map = client.get("/api/topology/network-map", headers={"X-Hearth-Token": "topology-secret"})
-        heatmap = client.get("/api/topology/route-heatmap", headers={"X-Hearth-Token": "topology-secret"})
-        critical_nodes = client.get("/api/topology/critical-nodes", headers={"X-Hearth-Token": "topology-secret"})
-        insights = client.get("/api/topology/insights", headers={"X-Hearth-Token": "topology-secret"})
+        topology = client.get(
+            "/api/topology", headers={"X-Hearth-Token": "topology-secret"}
+        )
+        network_map = client.get(
+            "/api/topology/network-map", headers={"X-Hearth-Token": "topology-secret"}
+        )
+        heatmap = client.get(
+            "/api/topology/route-heatmap", headers={"X-Hearth-Token": "topology-secret"}
+        )
+        critical_nodes = client.get(
+            "/api/topology/critical-nodes",
+            headers={"X-Hearth-Token": "topology-secret"},
+        )
+        insights = client.get(
+            "/api/topology/insights", headers={"X-Hearth-Token": "topology-secret"}
+        )
 
     assert topology.status_code == 200
     topology_payload = topology.json()
     assert topology_payload["overview"]["route_count"] >= 2
     assert topology_payload["overview"]["peer_count"] >= 2
-    assert any(item["interface_name"] == "tcp_backbone" for item in topology_payload["segments"])
+    assert any(
+        item["interface_name"] == "tcp_backbone"
+        for item in topology_payload["segments"]
+    )
     assert network_map.status_code == 200
     assert len(network_map.json()["segments"]) >= 2
     assert heatmap.status_code == 200
-    assert any(item["interface_name"] == "lan_bridge" for item in heatmap.json()["rows"])
+    assert any(
+        item["interface_name"] == "lan_bridge" for item in heatmap.json()["rows"]
+    )
     assert critical_nodes.status_code == 200
     assert len(critical_nodes.json()) >= 1
     assert insights.status_code == 200
@@ -1078,20 +1222,29 @@ enabled = true
             )
         ]
 
-        path_changes = client.get("/api/topology/path-changes", headers={"X-Hearth-Token": "timeline-secret"})
-        timeline = client.get("/api/logs/timeline", headers={"X-Hearth-Token": "timeline-secret"})
+        path_changes = client.get(
+            "/api/topology/path-changes", headers={"X-Hearth-Token": "timeline-secret"}
+        )
+        timeline = client.get(
+            "/api/logs/timeline", headers={"X-Hearth-Token": "timeline-secret"}
+        )
 
     assert path_changes.status_code == 200
     path_payload = path_changes.json()
     assert path_payload["changed"] >= 1
     assert path_payload["removed"] >= 1
-    assert any(item["destination_hash"] == initial_routes[0].destination_hash for item in path_payload["recent_changes"])
+    assert any(
+        item["destination_hash"] == initial_routes[0].destination_hash
+        for item in path_payload["recent_changes"]
+    )
 
     assert timeline.status_code == 200
     timeline_payload = timeline.json()
     assert timeline_payload["total"] >= 1
-    assert any(str(item["event_type"]).startswith("route.") for item in timeline_payload["events"])
-
+    assert any(
+        str(item["event_type"]).startswith("route.")
+        for item in timeline_payload["events"]
+    )
 
 
 def test_rollout_remote_logs_and_upgrade_endpoints(tmp_path: Path) -> None:
@@ -1123,7 +1276,11 @@ admin_token = "ops-secret"
         client.post(
             "/api/fleet/groups",
             headers={"X-Hearth-Token": "ops-secret"},
-            json={"name": "community-core", "description": "Main shared nodes", "group_type": "community"},
+            json={
+                "name": "community-core",
+                "description": "Main shared nodes",
+                "group_type": "community",
+            },
         )
         client.post(
             "/api/fleet/nodes",
@@ -1154,14 +1311,27 @@ admin_token = "ops-secret"
         rollout = client.post(
             "/api/rollouts",
             headers={"X-Hearth-Token": "ops-secret"},
-            json={"template_name": "community-default", "target_group": "community-core", "target_nodes": ["relay-east"]},
+            json={
+                "template_name": "community-default",
+                "target_group": "community-core",
+                "target_nodes": ["relay-east"],
+            },
         )
-        rollout_list = client.get("/api/rollouts", headers={"X-Hearth-Token": "ops-secret"})
-        remote_logs = client.get("/api/remote-logs", headers={"X-Hearth-Token": "ops-secret"})
+        rollout_list = client.get(
+            "/api/rollouts", headers={"X-Hearth-Token": "ops-secret"}
+        )
+        remote_logs = client.get(
+            "/api/remote-logs", headers={"X-Hearth-Token": "ops-secret"}
+        )
         upgrade = client.post(
             "/api/upgrades",
             headers={"X-Hearth-Token": "ops-secret"},
-            json={"action": "upgrade", "target_version": "1.1.0", "channel": "beta", "enable_maintenance": True},
+            json={
+                "action": "upgrade",
+                "target_version": "1.1.0",
+                "channel": "beta",
+                "enable_maintenance": True,
+            },
         )
         upgrades = client.get("/api/upgrades", headers={"X-Hearth-Token": "ops-secret"})
 
@@ -1169,7 +1339,9 @@ admin_token = "ops-secret"
     assert rollout.json()["template_name"] == "community-default"
     assert rollout.json()["status"] == "planned"
     assert rollout_list.status_code == 200
-    assert any(item["template_name"] == "community-default" for item in rollout_list.json())
+    assert any(
+        item["template_name"] == "community-default" for item in rollout_list.json()
+    )
     assert remote_logs.status_code == 200
     assert any(item["node_name"] == "relay-east" for item in remote_logs.json())
     assert upgrade.status_code == 200

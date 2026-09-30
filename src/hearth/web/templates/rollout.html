@@ -12,12 +12,12 @@
 
 <section class="panel">
   <div class="panel-header"><div><h2>{{ t("rollout.create") }}</h2></div></div>
-  <p class="muted">Remote rollout execution uses the fleet node management endpoint. Nodes without a reachable `dashboard_url` stay in the planned state.</p>
+  <p class="muted">{{ t('rollout.execution_hint') }}</p>
   <form method="post" action="{{ request.url.path }}">
     <div class="toolbar compact-toolbar">
       <label class="toolbar-field toolbar-field--small"><span>{{ t("rollout.action_type") }}</span>
         <select name="action">
-          <option value="apply_template">apply_template</option>
+          <option value="apply_template">{{ tv("apply_template") }}</option>
         </select>
       </label>
       <label class="toolbar-field toolbar-field--small"><span>{{ t("field.template") }}</span>
@@ -40,7 +40,7 @@
 
 {% if result %}
 <section class="panel">
-  <div class="panel-header"><div><h2>Latest Result</h2></div></div>
+  <div class="panel-header"><div><h2>{{ t('section.latest_result') }}</h2></div></div>
   <pre>{{ result | tojson(indent=2) }}</pre>
 </section>
 {% endif %}

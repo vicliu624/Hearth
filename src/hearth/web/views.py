@@ -2,16 +2,17 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import importlib.metadata
+import hashlib
 import json
 import os
 from pathlib import Path
 import platform
 import shutil
-import sys
 from urllib.parse import parse_qs, urlencode
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from hearth import __version__
@@ -30,12 +31,29 @@ from hearth.api.security import (
 )
 from hearth.core.lifecycle import ApplicationContext
 from hearth.services.security_service import KNOWN_PERMISSIONS
-from hearth.web.i18n import LANG_COOKIE_NAME, build_locale_options, resolve_locale, translate
+from hearth.web.i18n import (
+    translate_diagnostic,
+    LANG_COOKIE_NAME,
+    build_locale_options,
+    resolve_locale,
+    translate,
+)
 
 
 router = APIRouter(tags=["web"])
-templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+templates = Jinja2Templates(
+    directory=str(Path(__file__).resolve().parent / "templates")
+)
 
+
+_asset_root = Path(__file__).resolve().parent / "static" / "island"
+ASSET_REVISION = hashlib.sha256(
+    b"".join(
+        path.read_bytes()
+        for path in (_asset_root / "hearth.js", _asset_root / "hearth.css")
+        if path.is_file()
+    )
+).hexdigest()[:12]
 
 NOTICE_KIND_SUCCESS = "success"
 NOTICE_KIND_ERROR = "error"
@@ -44,6 +62,46 @@ PRESERVED_QUERY_KEYS = {"lang", "token"}
 
 def make_notice(kind: str, message: str) -> dict[str, str]:
     return {"kind": kind, "message": message}
+
+
+def localize_service(
+    request: Request, context: ApplicationContext, service: dict, summary: dict
+) -> dict:
+    item = dict(service)
+    locale = resolve_locale(request)
+    name = item["name"]
+    item["label"] = translate(locale, f"service.{name}")
+    item["category"] = translate_value(locale, item.get("category"))
+    parameters = {
+        "pid": summary.get("runtime", {}).get("pid") or "-",
+        "online": summary.get("interface_summary", {}).get("online", 0),
+        "total": summary.get("interface_summary", {}).get("total", 0),
+        "host": context.settings.web.host,
+        "port": context.settings.web.port,
+        "mode": translate_value(locale, context.settings.web.auth_mode),
+        "interval": context.settings.monitor.health_check_interval_sec
+        if name == "watchdog"
+        else context.settings.monitor.metrics_refresh_sec,
+        "cooldown": context.settings.monitor.restart_cooldown_sec,
+        "tasks": len(context.scheduler.task_names()),
+        "peers": summary.get("peer_count", 0),
+        "paths": summary.get("route_count", 0),
+        "announces": summary.get("announce_count", 0),
+        "path": str(context.settings.data_dir),
+    }
+    summary_keys = {
+        "reticulum_runtime": "runtime",
+        "web_console": "web",
+        "watchdog": "watchdog",
+        "state_refresh": "refresh",
+        "observation_sync": "observation",
+        "backup_manager": "backup",
+    }
+    if name in summary_keys:
+        item["summary"] = translate(
+            locale, f"service.{summary_keys[name]}_summary", **parameters
+        )
+    return item
 
 
 async def read_form_data(request: Request) -> dict[str, str]:
@@ -57,7 +115,11 @@ def parse_csv_list(value: str | None) -> list[str]:
 
 
 def _preserved_query(request: Request) -> list[tuple[str, str]]:
-    return [(key, value) for key, value in request.query_params.multi_items() if key in PRESERVED_QUERY_KEYS]
+    return [
+        (key, value)
+        for key, value in request.query_params.multi_items()
+        if key in PRESERVED_QUERY_KEYS
+    ]
 
 
 def build_href(request: Request, path: str) -> str:
@@ -164,7 +226,14 @@ def relative_time(locale: str, value: str | None) -> str:
         return value
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
-    seconds = max(int((datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds()), 0)
+    seconds = max(
+        int(
+            (
+                datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)
+            ).total_seconds()
+        ),
+        0,
+    )
     if seconds < 5:
         return translate(locale, "relative.just_now")
     if seconds < 60:
@@ -211,7 +280,7 @@ def shorten_label(value: str | None, max_length: int = 10) -> str:
     text = (value or "-").strip()
     if len(text) <= max_length:
         return text
-    return f"{text[:max_length - 3]}..."
+    return f"{text[: max_length - 3]}..."
 
 
 def get_total_memory() -> int | None:
@@ -358,23 +427,26 @@ def summarize_activity_history(
         reference = reference.replace(tzinfo=timezone.utc)
     target_timezone = reference.tzinfo
     bucket_count = max(total_hours // bucket_hours, 1)
-    current_bucket = _history_bucket_start(reference.astimezone(target_timezone), bucket_hours)
+    current_bucket = _history_bucket_start(
+        reference.astimezone(target_timezone), bucket_hours
+    )
     bucket_starts = [
         current_bucket - timedelta(hours=bucket_hours * (bucket_count - index - 1))
         for index in range(bucket_count)
     ]
     buckets = {
-        bucket_start: {"rx": 0, "tx": 0, "errors": 0}
-        for bucket_start in bucket_starts
+        bucket_start: {"rx": 0, "tx": 0, "errors": 0} for bucket_start in bucket_starts
     }
 
     previous_by_interface: dict[str, dict[str, int | datetime]] = {}
     for snapshot in snapshots:
         interface_name = str(snapshot.get("interface_name") or "")
-        captured_at = _coerce_history_timestamp(snapshot["captured_at"], target_timezone)
+        captured_at = _coerce_history_timestamp(
+            snapshot["captured_at"], target_timezone
+        )
         current = {
-            "rx": max(int(snapshot.get("rx_packets", 0) or 0), 0),
-            "tx": max(int(snapshot.get("tx_packets", 0) or 0), 0),
+            "rx": max(int(snapshot.get("rx_bytes", 0) or 0), 0),
+            "tx": max(int(snapshot.get("tx_bytes", 0) or 0), 0),
             "errors": max(int(snapshot.get("error_count", 0) or 0), 0),
             "captured_at": captured_at,
         }
@@ -382,9 +454,15 @@ def summarize_activity_history(
         if previous is not None:
             bucket_start = _history_bucket_start(captured_at, bucket_hours)
             if bucket_start in buckets:
-                buckets[bucket_start]["rx"] += max(current["rx"] - int(previous["rx"]), 0)
-                buckets[bucket_start]["tx"] += max(current["tx"] - int(previous["tx"]), 0)
-                buckets[bucket_start]["errors"] += max(current["errors"] - int(previous["errors"]), 0)
+                buckets[bucket_start]["rx"] += max(
+                    current["rx"] - int(previous["rx"]), 0
+                )
+                buckets[bucket_start]["tx"] += max(
+                    current["tx"] - int(previous["tx"]), 0
+                )
+                buckets[bucket_start]["errors"] += max(
+                    current["errors"] - int(previous["errors"]), 0
+                )
         previous_by_interface[interface_name] = current
 
     peak = max(
@@ -405,16 +483,20 @@ def summarize_activity_history(
                 "title": f"{bucket_start.strftime('%m-%d %H:%M')} - {(bucket_start + timedelta(hours=bucket_hours)).strftime('%H:%M')}",
                 "rx_value": format_counter(values["rx"]),
                 "tx_value": format_counter(values["tx"]),
-                "rx_height": 0 if values["rx"] == 0 else max(8, round(values["rx"] / peak * 100)),
-                "tx_height": 0 if values["tx"] == 0 else max(8, round(values["tx"] / peak * 100)),
+                "rx_height": 0
+                if values["rx"] == 0
+                else max(8, round(values["rx"] / peak * 100)),
+                "tx_height": 0
+                if values["tx"] == 0
+                else max(8, round(values["tx"] / peak * 100)),
             }
         )
 
     return {
         "bars": bars,
         "totals": {
-            "rx_packets": format_counter(total_rx),
-            "tx_packets": format_counter(total_tx),
+            "rx_bytes": format_counter(total_rx),
+            "tx_bytes": format_counter(total_tx),
             "error_count": total_errors,
         },
     }
@@ -428,7 +510,9 @@ def build_traffic_snapshot(history: dict[str, object]) -> dict[str, str | int]:
     return dict(history.get("totals", {}))
 
 
-def build_system_snapshot(context: ApplicationContext, summary: dict) -> dict[str, object]:
+def build_system_snapshot(
+    context: ApplicationContext, summary: dict
+) -> dict[str, object]:
     disk_usage = shutil.disk_usage(context.settings.data_dir)
     total_memory = get_total_memory()
     cpu_load: str | None = None
@@ -484,16 +568,32 @@ def build_health_score(summary: dict, interfaces: list[dict]) -> int:
         for item in interfaces
         if item.get("enabled") and item.get("status") in {"stopped", "crashed", "error"}
     )
-    return max(0, min(100, base_score - issue_penalty - degraded_penalty - warning_penalty - stopped_penalty))
+    return max(
+        0,
+        min(
+            100,
+            base_score
+            - issue_penalty
+            - degraded_penalty
+            - warning_penalty
+            - stopped_penalty,
+        ),
+    )
 
 
 def decorate_event_rows(logs: list[dict]) -> list[dict]:
     decorated: list[dict] = []
     for entry in logs:
-        decorated.append({
-            **entry,
-            "tone": build_tone(entry.get("severity") or entry.get("source") or entry.get("event_type")),
-        })
+        decorated.append(
+            {
+                **entry,
+                "tone": build_tone(
+                    entry.get("severity")
+                    or entry.get("source")
+                    or entry.get("event_type")
+                ),
+            }
+        )
     return decorated
 
 
@@ -525,7 +625,7 @@ def summarize_payload(payload: object, max_length: int = 88) -> str:
     single_line = " ".join(text.split())
     if len(single_line) <= max_length:
         return single_line
-    return f"{single_line[:max_length - 3]}..."
+    return f"{single_line[: max_length - 3]}..."
 
 
 def build_security_findings(context: ApplicationContext) -> list[str]:
@@ -540,7 +640,9 @@ def build_security_findings(context: ApplicationContext) -> list[str]:
     return findings
 
 
-def filter_audit_entries(request: Request, entries: list[dict]) -> tuple[list[dict], dict[str, object], list[str], list[str]]:
+def filter_audit_entries(
+    request: Request, entries: list[dict]
+) -> tuple[list[dict], dict[str, object], list[str], list[str]]:
     level = (request.query_params.get("level") or "").strip()
     source = (request.query_params.get("source") or "").strip()
     search = (request.query_params.get("search") or "").strip().lower()
@@ -551,9 +653,13 @@ def filter_audit_entries(request: Request, entries: list[dict]) -> tuple[list[di
 
     filtered = entries
     if level:
-        filtered = [item for item in filtered if str(item.get("severity") or "") == level]
+        filtered = [
+            item for item in filtered if str(item.get("severity") or "") == level
+        ]
     if source:
-        filtered = [item for item in filtered if str(item.get("source") or "") == source]
+        filtered = [
+            item for item in filtered if str(item.get("source") or "") == source
+        ]
     if search:
         filtered = [
             item
@@ -567,13 +673,19 @@ def filter_audit_entries(request: Request, entries: list[dict]) -> tuple[list[di
         item["payload_pretty"] = format_payload(item.get("payload"))
         item["payload_summary"] = summarize_payload(item.get("payload"))
 
-    levels = sorted({str(item.get("severity") or "") for item in entries if item.get("severity")})
-    sources = sorted({str(item.get("source") or "") for item in entries if item.get("source")})
+    levels = sorted(
+        {str(item.get("severity") or "") for item in entries if item.get("severity")}
+    )
+    sources = sorted(
+        {str(item.get("source") or "") for item in entries if item.get("source")}
+    )
     filters = {"level": level, "source": source, "search": search, "limit": limit}
     return decorate_event_rows(filtered[:limit]), filters, levels, sources
 
 
-def filter_peers(request: Request, peers: list[dict]) -> tuple[list[dict], dict[str, object], list[str]]:
+def filter_peers(
+    request: Request, peers: list[dict]
+) -> tuple[list[dict], dict[str, object], list[str]]:
     search = (request.query_params.get("search") or "").strip().lower()
     interface_name = (request.query_params.get("interface") or "").strip()
     try:
@@ -581,23 +693,39 @@ def filter_peers(request: Request, peers: list[dict]) -> tuple[list[dict], dict[
     except ValueError:
         limit = 10
 
-    interface_options = sorted({item.get("interface_name") for item in peers if item.get("interface_name")})
+    interface_options = sorted(
+        {item.get("interface_name") for item in peers if item.get("interface_name")}
+    )
     filtered = peers
     if search:
         filtered = [
-            item for item in filtered
-            if search in (item.get("display_name") or "").lower() or search in (item.get("peer_hash") or "").lower()
+            item
+            for item in filtered
+            if search in (item.get("display_name") or "").lower()
+            or search in (item.get("peer_hash") or "").lower()
         ]
     if interface_name:
-        filtered = [item for item in filtered if item.get("interface_name") == interface_name]
+        filtered = [
+            item for item in filtered if item.get("interface_name") == interface_name
+        ]
 
     for item in filtered:
-        item["tone"] = build_tone(item.get("interface_name") or item.get("source_type") or item.get("peer_hash"))
+        item["tone"] = build_tone(
+            item.get("interface_name")
+            or item.get("source_type")
+            or item.get("peer_hash")
+        )
 
-    return filtered[:limit], {"search": search, "interface": interface_name, "limit": limit}, interface_options
+    return (
+        filtered[:limit],
+        {"search": search, "interface": interface_name, "limit": limit},
+        interface_options,
+    )
 
 
-def build_page_context(request: Request, title_key: str, **extra: object) -> dict[str, object]:
+def build_page_context(
+    request: Request, title_key: str, **extra: object
+) -> dict[str, object]:
     locale = resolve_locale(request)
 
     def t(key: str, **kwargs: object) -> str:
@@ -627,9 +755,17 @@ def build_page_context(request: Request, title_key: str, **extra: object) -> dic
     }
 
 
-def finalize_page_response(request: Request, response: Response, context: ApplicationContext) -> Response:
+def finalize_page_response(
+    request: Request, response: Response, context: ApplicationContext
+) -> Response:
     if "lang" in request.query_params:
-        response.set_cookie(LANG_COOKIE_NAME, resolve_locale(request), httponly=False, samesite="lax", path="/")
+        response.set_cookie(
+            LANG_COOKIE_NAME,
+            resolve_locale(request),
+            httponly=False,
+            samesite="lax",
+            path="/",
+        )
 
     query_token = get_query_token(request)
     if query_token:
@@ -650,6 +786,32 @@ def render_page(
     **extra: object,
 ) -> Response:
     next_path = normalize_next_path(request.url.path)
+    sample = context.node_service.sample_metadata()
+    principal = authenticate_principal(request, context)
+    permissions = sorted(
+        permission
+        for permission in KNOWN_PERMISSIONS
+        if not auth_is_enabled(context)
+        or principal is not None
+        and context.security_service.principal_has_permission(principal, permission)
+    )
+    if context.settings.reticulum.backend != "mock_process" and template_name in {
+        "peers.html",
+        "announces.html",
+    }:
+        extra.setdefault(
+            "notice",
+            make_notice(
+                "info",
+                translate(
+                    resolve_locale(request), "observation.announce_stream_unavailable"
+                ),
+            ),
+        )
+    if request.headers.get("accept") == "application/vnd.hearth.page+json":
+        return JSONResponse(
+            {"page": jsonable_encoder(extra), "sample": sample}, status_code=status_code
+        )
     response = templates.TemplateResponse(
         request,
         template_name,
@@ -658,8 +820,15 @@ def render_page(
             title_key,
             auth_enabled=auth_is_enabled(context),
             admin_authenticated=is_admin_authenticated(request, context),
+            granted_permissions=permissions,
+            response_status=status_code,
+            asset_revision=ASSET_REVISION,
             login_href=build_href(request, f"/login?next={next_path}"),
             logout_href=build_href(request, "/logout"),
+            sampled_at=sample["observed_at"],
+            observation_status=sample["status"],
+            observation_stale=sample["stale"],
+            page_data=jsonable_encoder(extra),
             **extra,
         ),
         status_code=status_code,
@@ -709,9 +878,13 @@ async def render_interfaces_page(
     selected_metrics = None
     for item in interfaces:
         item["metrics_href"] = build_href(request, f"/interfaces/{item['name']}")
-        item["control_href"] = build_href(request, f"/interfaces/{item['name']}/control")
+        item["control_href"] = build_href(
+            request, f"/interfaces/{item['name']}/control"
+        )
         item["tone"] = build_tone(item.get("status") or item.get("health_status"))
-        item["rx_tx"] = f"{item['metrics'].get('rx_packets', 0)} / {item['metrics'].get('tx_packets', 0)}"
+        item["rx_tx"] = (
+            f"{item['metrics'].get('rx_bytes', 0)} / {item['metrics'].get('tx_bytes', 0)}"
+        )
         if item["name"] == selected_name:
             selected_metrics = item["metrics"]
     if selected_name and selected_metrics is None:
@@ -743,17 +916,28 @@ async def render_interface_detail_page(
 ) -> Response:
     summary = await context.node_service.status_summary(persist=False)
     interface = await context.interface_service.get_interface(name)
-    interface["tone"] = build_tone(interface.get("status") or interface.get("health_status"))
-    interface["rx_tx"] = f"{interface['metrics'].get('rx_packets', 0)} / {interface['metrics'].get('tx_packets', 0)}"
-    metric_rows = [{"label": humanize_key(key), "value": value} for key, value in interface.get("metrics", {}).items()]
+    interface["tone"] = build_tone(
+        interface.get("status") or interface.get("health_status")
+    )
+    interface["rx_tx"] = (
+        f"{interface['metrics'].get('rx_bytes', 0)} / {interface['metrics'].get('tx_bytes', 0)}"
+    )
+    metric_rows = [
+        {"label": humanize_key(key), "value": value}
+        for key, value in interface.get("metrics", {}).items()
+    ]
     history_now = datetime.now().astimezone()
     history_samples = [
         sample
-        for sample in context.database.list_interface_metric_snapshots(history_now.astimezone(timezone.utc) - timedelta(hours=26))
+        for sample in context.database.list_interface_metric_snapshots(
+            history_now.astimezone(timezone.utc) - timedelta(hours=26)
+        )
         if sample.get("interface_name") == name
     ]
     activity_history = summarize_activity_history(history_samples, now=history_now)
-    restart_history = context.database.list_restarts(limit=20, target_type="interface", target_name=name)
+    restart_history = context.database.list_restarts(
+        limit=20, target_type="interface", target_name=name
+    )
     return render_page(
         request,
         context,
@@ -779,10 +963,16 @@ async def render_health_page(
     notice: dict[str, str] | None = None,
 ) -> Response:
     summary = await context.node_service.status_summary(persist=False)
+    summary["issues"] = [
+        translate_diagnostic(resolve_locale(request), str(issue))
+        for issue in summary.get("issues", [])
+    ]
     interfaces = summary.get("interfaces", [])
     for item in interfaces:
         item["tone"] = build_tone(item.get("health_status") or item.get("status"))
-        item["rx_tx"] = f"{item['metrics'].get('rx_packets', 0)} / {item['metrics'].get('tx_packets', 0)}"
+        item["rx_tx"] = (
+            f"{item['metrics'].get('rx_bytes', 0)} / {item['metrics'].get('tx_bytes', 0)}"
+        )
     all_restarts = context.database.list_restarts(limit=100)
     restart_history = all_restarts[:20]
     raw_incidents = context.log_service.list_entries(limit=50)
@@ -797,11 +987,16 @@ async def render_health_page(
     if not incidents:
         incidents = raw_incidents[:10]
     incidents = decorate_event_rows(incidents[:20])
-    degraded_count = sum(1 for item in interfaces if item.get("enabled") and item.get("health_status") in {"degraded", "critical"})
+    degraded_count = sum(
+        1
+        for item in interfaces
+        if item.get("enabled") and item.get("health_status") in {"degraded", "critical"}
+    )
     warning_count = sum(
         1
         for item in interfaces
-        if item.get("enabled") and (item.get("health_status") == "warning" or item.get("status") == "stopped")
+        if item.get("enabled")
+        and (item.get("health_status") == "warning" or item.get("status") == "stopped")
     )
     return render_page(
         request,
@@ -831,7 +1026,9 @@ async def render_login_page(
     status_code: int = 200,
 ) -> Response:
     summary = await context.node_service.status_summary(persist=False)
-    resolved_next = normalize_next_path(next_path or request.query_params.get("next") or "/profile")
+    resolved_next = normalize_next_path(
+        next_path or request.query_params.get("next") or "/profile"
+    )
     return render_page(
         request,
         context,
@@ -847,25 +1044,34 @@ async def render_login_page(
     )
 
 
-
-async def render_peer_detail_page(request: Request, context: ApplicationContext, peer_hash: str) -> Response:
+async def render_peer_detail_page(
+    request: Request, context: ApplicationContext, peer_hash: str
+) -> Response:
     summary = await context.node_service.status_summary(persist=False)
     peer = await context.peer_service.get_peer(peer_hash)
-    announces = [item for item in await context.announce_service.list_announces(limit=200) if item.get("source_hash") == peer_hash]
+    announces = [
+        item
+        for item in await context.announce_service.list_announces(limit=200)
+        if item.get("source_hash") == peer_hash
+    ]
     for item in announces:
         if item.get("id") is not None:
             item["detail_href"] = build_href(request, f"/announces/{item['id']}")
     routes = [
         item
         for item in await context.route_service.list_routes(limit=200)
-        if item.get("destination_hash") == peer_hash or item.get("next_hop") == peer_hash
+        if item.get("destination_hash") == peer_hash
+        or item.get("next_hop") == peer_hash
     ]
     for item in routes:
         item["detail_href"] = build_href(request, f"/routes/{item['destination_hash']}")
     interfaces_seen = sorted(
         {
             value
-            for value in [peer.get("interface_name"), *[item.get("via_interface") for item in announces]]
+            for value in [
+                peer.get("interface_name"),
+                *[item.get("via_interface") for item in announces],
+            ]
             if value
         }
     )
@@ -884,17 +1090,23 @@ async def render_peer_detail_page(request: Request, context: ApplicationContext,
     )
 
 
-async def render_route_detail_page(request: Request, context: ApplicationContext, destination_hash: str) -> Response:
+async def render_route_detail_page(
+    request: Request, context: ApplicationContext, destination_hash: str
+) -> Response:
     summary = await context.node_service.status_summary(persist=False)
     route = await context.route_service.get_route(destination_hash)
     related_announces = [
-        item for item in await context.announce_service.list_announces(limit=200) if item.get("source_hash") == destination_hash
+        item
+        for item in await context.announce_service.list_announces(limit=200)
+        if item.get("source_hash") == destination_hash
     ]
     for item in related_announces:
         if item.get("id") is not None:
             item["detail_href"] = build_href(request, f"/announces/{item['id']}")
     related_peer = None
-    for candidate in filter(None, [route.get("next_hop"), route.get("destination_hash")]):
+    for candidate in filter(
+        None, [route.get("next_hop"), route.get("destination_hash")]
+    ):
         try:
             related_peer = await context.peer_service.get_peer(str(candidate))
             break
@@ -909,19 +1121,25 @@ async def render_route_detail_page(request: Request, context: ApplicationContext
         related_announces=related_announces[:20],
         related_peer=related_peer,
         routes_href=build_href(request, "/routes"),
-        peer_detail_href=build_href(request, f"/peers/{related_peer['peer_hash']}") if related_peer else None,
+        peer_detail_href=build_href(request, f"/peers/{related_peer['peer_hash']}")
+        if related_peer
+        else None,
         header_state=build_header_state(summary),
         shell_summary=summary,
     )
 
 
-async def render_announce_detail_page(request: Request, context: ApplicationContext, announce_id: int) -> Response:
+async def render_announce_detail_page(
+    request: Request, context: ApplicationContext, announce_id: int
+) -> Response:
     summary = await context.node_service.status_summary(persist=False)
     announce = await context.announce_service.get_announce(announce_id)
     related_peer = None
     related_route = None
     try:
-        related_peer = await context.peer_service.get_peer(str(announce.get("source_hash")))
+        related_peer = await context.peer_service.get_peer(
+            str(announce.get("source_hash"))
+        )
     except Exception:
         related_peer = None
     destination_hash = (announce.get("metadata") or {}).get("destination_hash")
@@ -945,14 +1163,22 @@ async def render_announce_detail_page(request: Request, context: ApplicationCont
         related_route=related_route,
         metadata_rows=metadata_rows,
         announces_href=build_href(request, "/announces"),
-        peer_detail_href=build_href(request, f"/peers/{related_peer['peer_hash']}") if related_peer else None,
-        route_detail_href=build_href(request, f"/routes/{related_route['destination_hash']}") if related_route else None,
+        peer_detail_href=build_href(request, f"/peers/{related_peer['peer_hash']}")
+        if related_peer
+        else None,
+        route_detail_href=build_href(
+            request, f"/routes/{related_route['destination_hash']}"
+        )
+        if related_route
+        else None,
         header_state=build_header_state(summary),
         shell_summary=summary,
     )
 
 
-async def render_peers_page(request: Request, context: ApplicationContext) -> HTMLResponse:
+async def render_peers_page(
+    request: Request, context: ApplicationContext
+) -> HTMLResponse:
     summary = await context.node_service.status_summary(persist=False)
     all_peers = await context.peer_service.list_recent(limit=200)
     for item in all_peers:
@@ -974,7 +1200,9 @@ async def render_peers_page(request: Request, context: ApplicationContext) -> HT
     )
 
 
-async def render_routes_page(request: Request, context: ApplicationContext) -> HTMLResponse:
+async def render_routes_page(
+    request: Request, context: ApplicationContext
+) -> HTMLResponse:
     summary = await context.node_service.status_summary(persist=False)
     routes = await context.route_service.list_routes(limit=100)
     for item in routes:
@@ -991,7 +1219,9 @@ async def render_routes_page(request: Request, context: ApplicationContext) -> H
     )
 
 
-async def render_announces_page(request: Request, context: ApplicationContext) -> HTMLResponse:
+async def render_announces_page(
+    request: Request, context: ApplicationContext
+) -> HTMLResponse:
     summary = await context.node_service.status_summary(persist=False)
     announces = await context.announce_service.list_announces(limit=100)
     for item in announces:
@@ -1009,7 +1239,9 @@ async def render_announces_page(request: Request, context: ApplicationContext) -
     )
 
 
-async def render_logs_page(request: Request, context: ApplicationContext) -> HTMLResponse:
+async def render_logs_page(
+    request: Request, context: ApplicationContext
+) -> HTMLResponse:
     summary = await context.node_service.status_summary(persist=False)
     level = request.query_params.get("level") or None
     module = request.query_params.get("module") or None
@@ -1057,7 +1289,9 @@ async def render_logs_page(request: Request, context: ApplicationContext) -> HTM
     )
 
 
-async def render_timeline_page(request: Request, context: ApplicationContext) -> HTMLResponse:
+async def render_timeline_page(
+    request: Request, context: ApplicationContext
+) -> HTMLResponse:
     summary = await context.node_service.status_summary(persist=False)
     level = request.query_params.get("level") or None
     module = request.query_params.get("module") or None
@@ -1070,7 +1304,9 @@ async def render_timeline_page(request: Request, context: ApplicationContext) ->
     except ValueError:
         since_minutes = 1440
     try:
-        bucket_minutes = max(1, min(int(request.query_params.get("bucket_minutes", "120")), 1440))
+        bucket_minutes = max(
+            1, min(int(request.query_params.get("bucket_minutes", "120")), 1440)
+        )
     except ValueError:
         bucket_minutes = 120
 
@@ -1085,8 +1321,12 @@ async def render_timeline_page(request: Request, context: ApplicationContext) ->
     for bucket in timeline.get("time_buckets", []):
         count = int(bucket.get("count") or 0)
         critical = int(bucket.get("critical") or 0)
-        bucket["count_height"] = f"{max(round(count / peak_count * 100), 10)}%" if count else "0%"
-        bucket["critical_height"] = f"{max(round(critical / peak_count * 100), 8)}%" if critical else "0%"
+        bucket["count_height"] = (
+            f"{max(round(count / peak_count * 100), 10)}%" if count else "0%"
+        )
+        bucket["critical_height"] = (
+            f"{max(round(critical / peak_count * 100), 8)}%" if critical else "0%"
+        )
     timeline["events"] = decorate_event_rows(list(timeline.get("events", [])))
 
     options_source = context.log_service.list_entries(limit=200)
@@ -1139,8 +1379,12 @@ async def render_maintenance_page(
         summary=summary,
         maintenance=maintenance,
         watchdog_state=bool_label(context.settings.monitor.watchdog_enabled),
-        auto_restart_runtime_state=bool_label(context.settings.monitor.auto_restart_runtime),
-        auto_restart_interface_state=bool_label(context.settings.monitor.auto_restart_interface),
+        auto_restart_runtime_state=bool_label(
+            context.settings.monitor.auto_restart_runtime
+        ),
+        auto_restart_interface_state=bool_label(
+            context.settings.monitor.auto_restart_interface
+        ),
         restart_cooldown_sec=context.settings.monitor.restart_cooldown_sec,
         header_state=build_header_state(summary),
         shell_summary=summary,
@@ -1178,7 +1422,11 @@ async def render_profile_page(
         client_host=client_host or "-",
         client_zone=client_zone,
         token_masked=mask_secret(token_value),
-        access_scope="public" if context.settings.security.allow_wan else "lan" if context.settings.security.allow_lan else "loopback",
+        access_scope="public"
+        if context.settings.security.allow_wan
+        else "lan"
+        if context.settings.security.allow_lan
+        else "loopback",
         security_findings=build_security_findings(context),
         quick_links=quick_links,
         header_state=build_header_state(summary),
@@ -1219,7 +1467,15 @@ async def render_roles_page(
 ) -> HTMLResponse:
     summary = await context.node_service.status_summary(persist=False)
     roles = context.security_service.list_roles()
-    permission_columns = sorted({permission for role in roles for permission in role["permissions"]})
+    for role in roles:
+        if role.get("builtin"):
+            role["label"] = translate_value(resolve_locale(request), role["name"])
+            role["description"] = translate(
+                resolve_locale(request), f"roles.description.{role['name']}"
+            )
+    permission_columns = sorted(
+        {permission for role in roles for permission in role["permissions"]}
+    )
     editable_roles = [role for role in roles if role.get("editable")]
     return render_page(
         request,
@@ -1310,7 +1566,11 @@ async def render_plugin_sources_page(
     result: dict | None = None,
 ) -> HTMLResponse:
     summary = await context.node_service.status_summary(persist=False)
-    sources = list(result.get("sources") or []) if result else context.plugin_service.list_sources()
+    sources = (
+        list(result.get("sources") or [])
+        if result
+        else context.plugin_service.list_sources()
+    )
     return render_page(
         request,
         context,
@@ -1343,7 +1603,8 @@ async def render_plugin_detail_page(
         response = await render_plugins_page(
             request,
             context,
-            notice=notice or make_notice(NOTICE_KIND_ERROR, translate(locale, "plugins.not_found")),
+            notice=notice
+            or make_notice(NOTICE_KIND_ERROR, translate(locale, "plugins.not_found")),
         )
         response.status_code = 404
         return response
@@ -1351,17 +1612,35 @@ async def render_plugin_detail_page(
     if plugin is not None:
         plugin_record.update(plugin)
     plugin_record["installed"] = plugin is not None
-    plugin_record["installable"] = bool(catalog_plugin.get("installable", False)) if catalog_plugin else bool(plugin_record.get("trusted_source"))
+    plugin_record["installable"] = (
+        bool(catalog_plugin.get("installable", False))
+        if catalog_plugin
+        else bool(plugin_record.get("trusted_source"))
+    )
     plugin_record["state_label"] = "Installed" if plugin is not None else "Catalog"
-    plugin_record["catalog_version"] = catalog_plugin.get("version") if catalog_plugin else None
-    plugin_record["catalog_description"] = catalog_plugin.get("description") if catalog_plugin else None
-    plugin_record["signature_status"] = (catalog_plugin or plugin_record).get("signature_status") if isinstance(catalog_plugin or plugin_record, dict) else None
+    plugin_record["catalog_version"] = (
+        catalog_plugin.get("version") if catalog_plugin else None
+    )
+    plugin_record["catalog_description"] = (
+        catalog_plugin.get("description") if catalog_plugin else None
+    )
+    plugin_record["signature_status"] = (
+        (catalog_plugin or plugin_record).get("signature_status")
+        if isinstance(catalog_plugin or plugin_record, dict)
+        else None
+    )
     dependency_plan: list[dict] = []
     try:
-        dependency_plan = context.plugin_service.resolve_dependencies(name) if catalog_plugin else []
+        dependency_plan = (
+            context.plugin_service.resolve_dependencies(name) if catalog_plugin else []
+        )
     except Exception:
         dependency_plan = []
-    history = [item for item in context.plugin_service.plugin_history(limit=30) if str(item.get("plugin_name") or "") == name][:10]
+    history = [
+        item
+        for item in context.plugin_service.plugin_history(limit=30)
+        if str(item.get("plugin_name") or "") == name
+    ][:10]
     return render_page(
         request,
         context,
@@ -1388,6 +1667,7 @@ async def render_services_page(
 ) -> HTMLResponse:
     summary = await context.node_service.status_summary(persist=False)
     services = await context.service_host_service.list_services()
+    services = [localize_service(request, context, item, summary) for item in services]
     for item in services:
         item["detail_href"] = build_href(request, f"/services/{item['name']}")
     return render_page(
@@ -1419,10 +1699,12 @@ async def render_service_detail_page(
         response = await render_services_page(
             request,
             context,
-            notice=notice or make_notice(NOTICE_KIND_ERROR, translate(locale, "services.not_found")),
+            notice=notice
+            or make_notice(NOTICE_KIND_ERROR, translate(locale, "services.not_found")),
         )
         response.status_code = 404
         return response
+    service = localize_service(request, context, service, summary)
     return render_page(
         request,
         context,
@@ -1565,13 +1847,20 @@ async def render_fleet_node_detail_page(
         response = await render_fleet_nodes_page(
             request,
             context,
-            notice=notice or make_notice(NOTICE_KIND_ERROR, translate(locale, "fleet.node_not_found")),
+            notice=notice
+            or make_notice(
+                NOTICE_KIND_ERROR, translate(locale, "fleet.node_not_found")
+            ),
         )
         response.status_code = 404
         return response
     node["tone"] = build_tone(node.get("health_status") or node.get("runtime_status"))
     dashboard_url = str(node.get("dashboard_url") or "").strip()
-    dashboard_href = build_href(request, dashboard_url) if dashboard_url.startswith("/") else (dashboard_url or None)
+    dashboard_href = (
+        build_href(request, dashboard_url)
+        if dashboard_url.startswith("/")
+        else (dashboard_url or None)
+    )
     return render_page(
         request,
         context,
@@ -1586,7 +1875,9 @@ async def render_fleet_node_detail_page(
         health_href=build_href(request, "/fleet/health"),
         events_href=build_href(request, "/fleet/events"),
         dashboard_href=dashboard_href,
-        remote_logs_href=build_href_with_query(request, "/remote-logs", node_name=node["node_name"]),
+        remote_logs_href=build_href_with_query(
+            request, "/remote-logs", node_name=node["node_name"]
+        ),
         rollout_href=build_href(request, "/rollout"),
         upgrade_href=build_href(request, "/upgrade"),
         header_state=build_header_state(summary),
@@ -1600,10 +1891,15 @@ async def render_fleet_tags_page(
 ) -> HTMLResponse:
     summary = await context.node_service.status_summary(persist=False)
     tags = await context.fleet_service.list_tags()
-    tagged_nodes = sorted({node_name for item in tags for node_name in list(item.get("nodes") or [])})
+    tagged_nodes = sorted(
+        {node_name for item in tags for node_name in list(item.get("nodes") or [])}
+    )
     for item in tags:
         item["node_links"] = [
-            {"name": node_name, "href": build_href(request, f"/fleet/nodes/{node_name}")}
+            {
+                "name": node_name,
+                "href": build_href(request, f"/fleet/nodes/{node_name}"),
+            }
             for node_name in list(item.get("nodes") or [])
         ]
     return render_page(
@@ -1632,7 +1928,9 @@ async def render_fleet_health_page(
     health = await context.fleet_service.health_view()
     for node in health["at_risk"]:
         node["detail_href"] = build_href(request, f"/fleet/nodes/{node['node_name']}")
-        node["tone"] = build_tone(node.get("health_status") or node.get("runtime_status"))
+        node["tone"] = build_tone(
+            node.get("health_status") or node.get("runtime_status")
+        )
     return render_page(
         request,
         context,
@@ -1665,9 +1963,13 @@ async def render_fleet_events_page(
     if node_name:
         events = [item for item in events if node_name in list(item.get("nodes") or [])]
     if severity:
-        events = [item for item in events if str(item.get("severity") or "") == severity]
+        events = [
+            item for item in events if str(item.get("severity") or "") == severity
+        ]
     nodes = await context.fleet_service.list_nodes()
-    node_options = sorted({str(item.get("node_name") or "") for item in nodes if item.get("node_name")})
+    node_options = sorted(
+        {str(item.get("node_name") or "") for item in nodes if item.get("node_name")}
+    )
     filters = {"node_name": node_name, "severity": severity, "limit": limit}
     return render_page(
         request,
@@ -1761,8 +2063,12 @@ async def render_security_page(
         allow_lan_state=bool_label(context.settings.security.allow_lan),
         allow_wan_state=bool_label(context.settings.security.allow_wan),
         watchdog_state=bool_label(context.settings.monitor.watchdog_enabled),
-        auto_restart_runtime_state=bool_label(context.settings.monitor.auto_restart_runtime),
-        auto_restart_interface_state=bool_label(context.settings.monitor.auto_restart_interface),
+        auto_restart_runtime_state=bool_label(
+            context.settings.monitor.auto_restart_runtime
+        ),
+        auto_restart_interface_state=bool_label(
+            context.settings.monitor.auto_restart_interface
+        ),
         restart_cooldown_sec=context.settings.monitor.restart_cooldown_sec,
         browser_headers=headers,
         browser_header_count=sum(1 for item in headers if item["active"]),
@@ -1818,7 +2124,9 @@ async def render_config_page(
             revision_id = None
         if revision_id is not None:
             selected_revision = context.config_version_service.get_revision(revision_id)
-            compare_summary = context.config_version_service.compare_with_current(revision_id)
+            compare_summary = context.config_version_service.compare_with_current(
+                revision_id
+            )
     editor_raw = raw_config["raw"] if raw_text is None else raw_text
     if raw_text is None and selected_revision:
         editor_raw = selected_revision["raw_text"]
@@ -1833,7 +2141,11 @@ async def render_config_page(
         selected_revision=selected_revision,
         compare_summary=compare_summary,
         config_history_href=build_href(request, "/config/history"),
-        config_review_href=build_href(request, f"/config/review/{selected_revision['id']}") if selected_revision else None,
+        config_review_href=build_href(
+            request, f"/config/review/{selected_revision['id']}"
+        )
+        if selected_revision
+        else None,
         notice=notice,
         result=result,
         header_state=build_header_state(summary),
@@ -1850,7 +2162,9 @@ async def render_config_history_page(
     summary = await context.node_service.status_summary(persist=False)
     revisions = context.config_version_service.list_revisions(limit=50)
     for revision in revisions:
-        revision["review_href"] = build_href(request, f"/config/review/{revision['id']}")
+        revision["review_href"] = build_href(
+            request, f"/config/review/{revision['id']}"
+        )
     return render_page(
         request,
         context,
@@ -1875,7 +2189,11 @@ async def render_config_review_page(
 ) -> HTMLResponse:
     summary = await context.node_service.status_summary(persist=False)
     revision = context.config_version_service.get_revision(revision_id)
-    compare_summary = context.config_version_service.compare_with_current(revision_id) if revision else None
+    compare_summary = (
+        context.config_version_service.compare_with_current(revision_id)
+        if revision
+        else None
+    )
     return render_page(
         request,
         context,
@@ -1903,13 +2221,17 @@ async def render_backup_page(
         {
             "path": archive,
             "name": Path(archive).name,
-            "detail_href": build_href_with_query(request, "/backup/detail", archive=archive),
+            "detail_href": build_href_with_query(
+                request, "/backup/detail", archive=archive
+            ),
         }
         for archive in context.backup_service.list_archives()
     ]
     snapshots = context.backup_service.list_snapshots()
     for item in snapshots:
-        item["detail_href"] = build_href_with_query(request, "/backup/detail", archive=item.get("archive_path"))
+        item["detail_href"] = build_href_with_query(
+            request, "/backup/detail", archive=item.get("archive_path")
+        )
     dr_helper = context.backup_service.disaster_recovery_helper()
     return render_page(
         request,
@@ -1934,8 +2256,16 @@ async def render_backup_detail_page(
 ) -> HTMLResponse:
     summary = await context.node_service.status_summary(persist=False)
     archive_path = str(request.query_params.get("archive") or "").strip()
-    detail = context.backup_service.inspect_archive(archive_path) if archive_path else None
-    dr_helper = context.backup_service.disaster_recovery_helper(archive_path=archive_path or None) if archive_path else None
+    detail = (
+        context.backup_service.inspect_archive(archive_path) if archive_path else None
+    )
+    dr_helper = (
+        context.backup_service.disaster_recovery_helper(
+            archive_path=archive_path or None
+        )
+        if archive_path
+        else None
+    )
     if detail is not None:
         detail["size_pretty"] = format_bytes(int(detail.get("size_bytes") or 0))
     return render_page(
@@ -1974,22 +2304,34 @@ async def render_system_page(
 
 
 @router.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+async def dashboard(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_dashboard_page(request, context)
 
 
 @router.get("/interfaces", response_class=HTMLResponse)
-async def interfaces_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+async def interfaces_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_interfaces_page(request, context)
 
 
-@router.get("/interfaces/{name}", response_class=HTMLResponse)
-async def interface_detail_page(name: str, request: Request, context: ApplicationContext = Depends(get_context)) -> Response:
+@router.get("/interfaces/{name:path}", response_class=HTMLResponse)
+async def interface_detail_page(
+    name: str, request: Request, context: ApplicationContext = Depends(get_context)
+) -> Response:
     return await render_interface_detail_page(request, context, name)
 
 
-@router.post("/interfaces/{name}/control", response_class=HTMLResponse, dependencies=[Depends(require_permission("operate"))])
-async def interface_control(name: str, request: Request, context: ApplicationContext = Depends(get_context)) -> Response:
+@router.post(
+    "/interfaces/{name:path}/control",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("operate"))],
+)
+async def interface_control(
+    name: str, request: Request, context: ApplicationContext = Depends(get_context)
+) -> Response:
     form = await read_form_data(request)
     action = str(form.get("action", "")).lower()
     selected_name = str(form.get("selected") or name)
@@ -2009,75 +2351,121 @@ async def interface_control(name: str, request: Request, context: ApplicationCon
         locale = resolve_locale(request)
         notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, notice_key))
         if return_view == "detail":
-            return await render_interface_detail_page(request, context, name, notice=notice, result=result)
-        return await render_interfaces_page(request, context, selected_name=selected_name, notice=notice, result=result)
+            return await render_interface_detail_page(
+                request, context, name, notice=notice, result=result
+            )
+        return await render_interfaces_page(
+            request, context, selected_name=selected_name, notice=notice, result=result
+        )
     except Exception as exc:
         locale = resolve_locale(request)
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
         if return_view == "detail":
-            return await render_interface_detail_page(request, context, name, notice=notice)
-        return await render_interfaces_page(request, context, selected_name=selected_name, notice=notice)
+            return await render_interface_detail_page(
+                request, context, name, notice=notice
+            )
+        return await render_interfaces_page(
+            request, context, selected_name=selected_name, notice=notice
+        )
 
 
 @router.get("/peers", response_class=HTMLResponse)
-async def peers_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+async def peers_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_peers_page(request, context)
 
 
 @router.get("/peers/{peer_hash}", response_class=HTMLResponse)
-async def peer_detail_page(peer_hash: str, request: Request, context: ApplicationContext = Depends(get_context)) -> Response:
+async def peer_detail_page(
+    peer_hash: str, request: Request, context: ApplicationContext = Depends(get_context)
+) -> Response:
     return await render_peer_detail_page(request, context, peer_hash)
 
 
 @router.get("/routes", response_class=HTMLResponse)
-async def routes_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+async def routes_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_routes_page(request, context)
 
 
 @router.get("/routes/{destination_hash}", response_class=HTMLResponse)
-async def route_detail_page(destination_hash: str, request: Request, context: ApplicationContext = Depends(get_context)) -> Response:
+async def route_detail_page(
+    destination_hash: str,
+    request: Request,
+    context: ApplicationContext = Depends(get_context),
+) -> Response:
     return await render_route_detail_page(request, context, destination_hash)
 
 
 @router.get("/announces", response_class=HTMLResponse)
-async def announces_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+async def announces_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_announces_page(request, context)
 
 
 @router.get("/announces/{announce_id}", response_class=HTMLResponse)
-async def announce_detail_page(announce_id: int, request: Request, context: ApplicationContext = Depends(get_context)) -> Response:
+async def announce_detail_page(
+    announce_id: int,
+    request: Request,
+    context: ApplicationContext = Depends(get_context),
+) -> Response:
     return await render_announce_detail_page(request, context, announce_id)
 
 
 @router.get("/logs", response_class=HTMLResponse)
-async def logs_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+async def logs_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_logs_page(request, context)
 
 
 @router.get("/timeline", response_class=HTMLResponse)
-async def timeline_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+async def timeline_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_timeline_page(request, context)
 
 
-@router.get("/health", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def health_page(request: Request, context: ApplicationContext = Depends(get_context)) -> Response:
+@router.get(
+    "/health",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def health_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> Response:
     return await render_health_page(request, context)
 
 
 @router.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request, context: ApplicationContext = Depends(get_context)) -> Response:
+async def login_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> Response:
     return await render_login_page(request, context)
 
 
 @router.post("/login", response_class=HTMLResponse)
-async def login_page_post(request: Request, context: ApplicationContext = Depends(get_context)) -> Response:
+async def login_page_post(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> Response:
     form = await read_form_data(request)
-    next_path = normalize_next_path(form.get("next") or request.query_params.get("next") or "/profile")
+    next_path = normalize_next_path(
+        form.get("next") or request.query_params.get("next") or "/profile"
+    )
     locale = resolve_locale(request)
     client_host = request.client.host if request.client else None
     if not auth_is_enabled(context):
-        notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "auth.not_required"))
-        return await render_login_page(request, context, notice=notice, next_path=next_path)
+        notice = make_notice(
+            NOTICE_KIND_SUCCESS, translate(locale, "auth.not_required")
+        )
+        return await render_login_page(
+            request, context, notice=notice, next_path=next_path
+        )
 
     token = str(form.get("token") or "").strip()
     principal = context.security_service.authenticate_token(token) if token else None
@@ -2086,7 +2474,12 @@ async def login_page_post(request: Request, context: ApplicationContext = Depend
             "auth.login_succeeded",
             "admin token login succeeded",
             source="web_auth",
-            payload={"client_host": client_host, "next": next_path, "subject": principal.get("subject"), "role": principal.get("role")},
+            payload={
+                "client_host": client_host,
+                "next": next_path,
+                "subject": principal.get("subject"),
+                "role": principal.get("role"),
+            },
         )
         response = RedirectResponse(build_href(request, next_path), status_code=303)
         set_admin_token_cookie(response, token)
@@ -2100,11 +2493,15 @@ async def login_page_post(request: Request, context: ApplicationContext = Depend
         payload={"client_host": client_host, "next": next_path},
     )
     notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "auth.login_failed"))
-    return await render_login_page(request, context, notice=notice, next_path=next_path, status_code=401)
+    return await render_login_page(
+        request, context, notice=notice, next_path=next_path, status_code=401
+    )
 
 
 @router.post("/logout", response_class=HTMLResponse)
-async def logout_page_post(request: Request, context: ApplicationContext = Depends(get_context)) -> Response:
+async def logout_page_post(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> Response:
     client_host = request.client.host if request.client else None
     context.database.record_event(
         "auth.logout",
@@ -2117,13 +2514,25 @@ async def logout_page_post(request: Request, context: ApplicationContext = Depen
     return finalize_page_response(request, response, context)
 
 
-@router.get("/maintenance", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def maintenance_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/maintenance",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def maintenance_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_maintenance_page(request, context)
 
 
-@router.post("/maintenance", response_class=HTMLResponse, dependencies=[Depends(require_permission("maintenance"))])
-async def maintenance_page_post(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/maintenance",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("maintenance"))],
+)
+async def maintenance_page_post(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     form = await read_form_data(request)
     action = str(form.get("action", "enable")).lower()
     locale = resolve_locale(request)
@@ -2134,32 +2543,62 @@ async def maintenance_page_post(request: Request, context: ApplicationContext = 
                 until_hours = max(0, int(form.get("until_hours") or 0))
             except ValueError:
                 until_hours = 0
-            until_at = datetime.now(timezone.utc) + timedelta(hours=until_hours) if until_hours else None
-            result = context.maintenance_service.enable(reason=reason, until_at=until_at, actor="web")
-            notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.maintenance_enabled"))
+            until_at = (
+                datetime.now(timezone.utc) + timedelta(hours=until_hours)
+                if until_hours
+                else None
+            )
+            result = context.maintenance_service.enable(
+                reason=reason, until_at=until_at, actor="web"
+            )
+            notice = make_notice(
+                NOTICE_KIND_SUCCESS, translate(locale, "notice.maintenance_enabled")
+            )
         elif action == "disable":
             result = context.maintenance_service.disable(actor="web")
-            notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.maintenance_disabled"))
+            notice = make_notice(
+                NOTICE_KIND_SUCCESS, translate(locale, "notice.maintenance_disabled")
+            )
         else:
             raise ValueError(f"unsupported action: {action}")
         return await render_maintenance_page(request, context, notice=notice)
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
         return await render_maintenance_page(request, context, notice=notice)
 
 
-@router.get("/profile", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def profile_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/profile",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def profile_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_profile_page(request, context)
 
 
-@router.get("/users", response_class=HTMLResponse, dependencies=[Depends(require_permission("security"))])
-async def users_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/users",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("security"))],
+)
+async def users_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_users_page(request, context)
 
 
-@router.post("/users", response_class=HTMLResponse, dependencies=[Depends(require_permission("security"))])
-async def users_page_post(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/users",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("security"))],
+)
+async def users_page_post(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     form = await read_form_data(request)
     action = str(form.get("action", "create_user")).lower()
     username = str(form.get("username") or "").strip()
@@ -2171,31 +2610,55 @@ async def users_page_post(request: Request, context: ApplicationContext = Depend
                 display_name=str(form.get("display_name") or "").strip() or None,
                 role=str(form.get("role") or "viewer"),
             )
-            notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.user_created"))
+            notice = make_notice(
+                NOTICE_KIND_SUCCESS, translate(locale, "notice.user_created")
+            )
         elif action == "enable_user":
             result = context.security_service.set_user_enabled(username, True)
-            notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.user_updated"))
+            notice = make_notice(
+                NOTICE_KIND_SUCCESS, translate(locale, "notice.user_updated")
+            )
         elif action == "disable_user":
             result = context.security_service.set_user_enabled(username, False)
-            notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.user_updated"))
+            notice = make_notice(
+                NOTICE_KIND_SUCCESS, translate(locale, "notice.user_updated")
+            )
         elif action == "set_role":
-            result = context.security_service.set_user_role(username, str(form.get("role") or "viewer"))
-            notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.user_updated"))
+            result = context.security_service.set_user_role(
+                username, str(form.get("role") or "viewer")
+            )
+            notice = make_notice(
+                NOTICE_KIND_SUCCESS, translate(locale, "notice.user_updated")
+            )
         else:
             raise ValueError(f"unsupported action: {action}")
         return await render_users_page(request, context, notice=notice, result=result)
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
         return await render_users_page(request, context, notice=notice)
 
 
-@router.get("/roles", response_class=HTMLResponse, dependencies=[Depends(require_permission("security"))])
-async def roles_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/roles",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("security"))],
+)
+async def roles_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_roles_page(request, context)
 
 
-@router.post("/roles", response_class=HTMLResponse, dependencies=[Depends(require_permission("security"))])
-async def roles_page_post(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/roles",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("security"))],
+)
+async def roles_page_post(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     form = await read_form_data(request)
     action = str(form.get("action", "create_role")).lower()
     role_name = str(form.get("role_name") or form.get("name") or "").strip()
@@ -2224,19 +2687,33 @@ async def roles_page_post(request: Request, context: ApplicationContext = Depend
             raise ValueError(f"unsupported action: {action}")
         return await render_roles_page(request, context, notice=notice, result=result)
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
         response = await render_roles_page(request, context, notice=notice)
         response.status_code = 400
         return response
 
 
-@router.get("/tokens", response_class=HTMLResponse, dependencies=[Depends(require_permission("tokens"))])
-async def tokens_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/tokens",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("tokens"))],
+)
+async def tokens_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_tokens_page(request, context)
 
 
-@router.post("/tokens", response_class=HTMLResponse, dependencies=[Depends(require_permission("tokens"))])
-async def tokens_page_post(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/tokens",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("tokens"))],
+)
+async def tokens_page_post(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     form = await read_form_data(request)
     action = str(form.get("action", "create_token")).lower()
     token_name = str(form.get("token_name") or "").strip()
@@ -2247,7 +2724,11 @@ async def tokens_page_post(request: Request, context: ApplicationContext = Depen
                 expires_days = max(0, int(form.get("expires_days") or 0))
             except ValueError:
                 expires_days = 0
-            scopes = [item.strip() for item in str(form.get("scopes") or "").split(",") if item.strip()]
+            scopes = [
+                item.strip()
+                for item in str(form.get("scopes") or "").split(",")
+                if item.strip()
+            ]
             token = context.security_service.create_api_token(
                 token_name=token_name,
                 owner_username=str(form.get("owner_username") or "").strip() or None,
@@ -2256,52 +2737,96 @@ async def tokens_page_post(request: Request, context: ApplicationContext = Depen
                 expires_in_days=expires_days or None,
             )
             result = {"token": token}
-            notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.token_created"))
+            notice = make_notice(
+                NOTICE_KIND_SUCCESS, translate(locale, "notice.token_created")
+            )
         elif action == "enable_token":
             result = context.security_service.set_api_token_enabled(token_name, True)
-            notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.token_updated"))
+            notice = make_notice(
+                NOTICE_KIND_SUCCESS, translate(locale, "notice.token_updated")
+            )
         elif action == "disable_token":
             result = context.security_service.set_api_token_enabled(token_name, False)
-            notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.token_updated"))
+            notice = make_notice(
+                NOTICE_KIND_SUCCESS, translate(locale, "notice.token_updated")
+            )
         else:
             raise ValueError(f"unsupported action: {action}")
         return await render_tokens_page(request, context, notice=notice, result=result)
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
         return await render_tokens_page(request, context, notice=notice)
 
 
-@router.get("/plugins", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def plugins_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/plugins",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def plugins_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_plugins_page(request, context)
 
 
-@router.get("/plugin-sources", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def plugin_sources_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/plugin-sources",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def plugin_sources_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_plugin_sources_page(request, context)
 
 
-@router.post("/plugin-sources", response_class=HTMLResponse, dependencies=[Depends(require_permission("configure"))])
-async def plugin_sources_page_post(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/plugin-sources",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("configure"))],
+)
+async def plugin_sources_page_post(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     locale = resolve_locale(request)
     try:
         result = context.plugin_service.refresh_sources()
-        notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.plugin_sources_refreshed"))
-        return await render_plugin_sources_page(request, context, notice=notice, result=result)
+        notice = make_notice(
+            NOTICE_KIND_SUCCESS, translate(locale, "notice.plugin_sources_refreshed")
+        )
+        return await render_plugin_sources_page(
+            request, context, notice=notice, result=result
+        )
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
         response = await render_plugin_sources_page(request, context, notice=notice)
         response.status_code = 400
         return response
 
 
-@router.get("/plugins/{name}", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def plugin_detail_page(name: str, request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/plugins/{name}",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def plugin_detail_page(
+    name: str, request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_plugin_detail_page(request, context, name)
 
 
-@router.post("/plugins/{name}", response_class=HTMLResponse, dependencies=[Depends(require_permission("configure"))])
-async def plugin_detail_page_post(name: str, request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/plugins/{name}",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("configure"))],
+)
+async def plugin_detail_page_post(
+    name: str, request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     form = await read_form_data(request)
     action = str(form.get("action") or "enable").lower()
     locale = resolve_locale(request)
@@ -2309,81 +2834,154 @@ async def plugin_detail_page_post(name: str, request: Request, context: Applicat
         if action in {"enable", "disable"}:
             enabled = action == "enable"
             result = context.plugin_service.set_plugin_enabled(name, enabled)
-            notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.plugin_updated"))
+            notice = make_notice(
+                NOTICE_KIND_SUCCESS, translate(locale, "notice.plugin_updated")
+            )
         elif action == "install":
-            enable = str(form.get("enabled", "true")).lower() not in {"0", "false", "off", "no"}
+            enable = str(form.get("enabled", "true")).lower() not in {
+                "0",
+                "false",
+                "off",
+                "no",
+            }
             result = context.plugin_service.install_plugin(name, enable=enable)
             notice = make_notice(NOTICE_KIND_SUCCESS, "Plugin installed.")
         elif action == "update":
             enable_value = str(form.get("enabled") or "").strip().lower()
-            enable = None if not enable_value else enable_value in {"1", "true", "on", "yes"}
+            enable = (
+                None if not enable_value else enable_value in {"1", "true", "on", "yes"}
+            )
             result = context.plugin_service.update_plugin(name, enable=enable)
             notice = make_notice(NOTICE_KIND_SUCCESS, "Plugin updated from catalog.")
         elif action == "uninstall":
-            remove_dependents = str(form.get("remove_dependents", "")).lower() in {"1", "true", "on", "yes"}
-            result = context.plugin_service.uninstall_plugin(name, remove_dependents=remove_dependents)
+            remove_dependents = str(form.get("remove_dependents", "")).lower() in {
+                "1",
+                "true",
+                "on",
+                "yes",
+            }
+            result = context.plugin_service.uninstall_plugin(
+                name, remove_dependents=remove_dependents
+            )
             notice = make_notice(NOTICE_KIND_SUCCESS, "Plugin uninstalled.")
         elif action == "refresh_sources":
             result = context.plugin_service.refresh_sources()
-            notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.plugin_sources_refreshed"))
+            notice = make_notice(
+                NOTICE_KIND_SUCCESS,
+                translate(locale, "notice.plugin_sources_refreshed"),
+            )
         else:
             raise ValueError(f"unsupported action: {action}")
-        return await render_plugin_detail_page(request, context, name, notice=notice, result=result)
+        return await render_plugin_detail_page(
+            request, context, name, notice=notice, result=result
+        )
     except LookupError as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
         response = await render_plugins_page(request, context, notice=notice)
         response.status_code = 404
         return response
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
-        response = await render_plugin_detail_page(request, context, name, notice=notice)
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
+        response = await render_plugin_detail_page(
+            request, context, name, notice=notice
+        )
         response.status_code = 400
         return response
 
 
-@router.get("/services", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def services_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/services",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def services_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_services_page(request, context)
 
 
-@router.get("/services/{name}", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def service_detail_page(name: str, request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/services/{name}",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def service_detail_page(
+    name: str, request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_service_detail_page(request, context, name)
 
 
-@router.post("/services/{name}", response_class=HTMLResponse, dependencies=[Depends(require_permission("operate"))])
-async def service_detail_page_post(name: str, request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/services/{name}",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("operate"))],
+)
+async def service_detail_page_post(
+    name: str, request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     form = await read_form_data(request)
     action = str(form.get("action") or "sync").lower()
     locale = resolve_locale(request)
     try:
         result = await context.service_host_service.control(name, action)
-        notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.service_updated"))
-        return await render_service_detail_page(request, context, name, notice=notice, result=result)
+        notice = make_notice(
+            NOTICE_KIND_SUCCESS, translate(locale, "notice.service_updated")
+        )
+        return await render_service_detail_page(
+            request, context, name, notice=notice, result=result
+        )
     except LookupError as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
         response = await render_services_page(request, context, notice=notice)
         response.status_code = 404
         return response
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
-        response = await render_service_detail_page(request, context, name, notice=notice)
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
+        response = await render_service_detail_page(
+            request, context, name, notice=notice
+        )
         response.status_code = 400
         return response
 
 
-@router.get("/fleet", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def fleet_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/fleet",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def fleet_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_fleet_dashboard_page(request, context)
 
 
-@router.get("/fleet/nodes", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def fleet_nodes_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/fleet/nodes",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def fleet_nodes_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_fleet_nodes_page(request, context)
 
 
-@router.post("/fleet/nodes", response_class=HTMLResponse, dependencies=[Depends(require_permission("configure"))])
-async def fleet_nodes_page_post(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/fleet/nodes",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("configure"))],
+)
+async def fleet_nodes_page_post(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     form = await read_form_data(request)
     locale = resolve_locale(request)
     try:
@@ -2396,20 +2994,38 @@ async def fleet_nodes_page_post(request: Request, context: ApplicationContext = 
             runtime_status=str(form.get("runtime_status") or "stopped"),
             region=str(form.get("region") or "").strip() or None,
         )
-        notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.fleet_node_saved"))
-        return await render_fleet_nodes_page(request, context, notice=notice, result=result)
+        notice = make_notice(
+            NOTICE_KIND_SUCCESS, translate(locale, "notice.fleet_node_saved")
+        )
+        return await render_fleet_nodes_page(
+            request, context, notice=notice, result=result
+        )
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
         return await render_fleet_nodes_page(request, context, notice=notice)
 
 
-@router.get("/fleet/groups", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def fleet_groups_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/fleet/groups",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def fleet_groups_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_fleet_groups_page(request, context)
 
 
-@router.post("/fleet/groups", response_class=HTMLResponse, dependencies=[Depends(require_permission("configure"))])
-async def fleet_groups_page_post(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/fleet/groups",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("configure"))],
+)
+async def fleet_groups_page_post(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     form = await read_form_data(request)
     locale = resolve_locale(request)
     try:
@@ -2418,20 +3034,38 @@ async def fleet_groups_page_post(request: Request, context: ApplicationContext =
             description=str(form.get("description") or "").strip() or None,
             group_type=str(form.get("group_type") or "custom"),
         )
-        notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.group_saved"))
-        return await render_fleet_groups_page(request, context, notice=notice, result=result)
+        notice = make_notice(
+            NOTICE_KIND_SUCCESS, translate(locale, "notice.group_saved")
+        )
+        return await render_fleet_groups_page(
+            request, context, notice=notice, result=result
+        )
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
         return await render_fleet_groups_page(request, context, notice=notice)
 
 
-@router.get("/fleet/templates", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def fleet_templates_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/fleet/templates",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def fleet_templates_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_fleet_templates_page(request, context)
 
 
-@router.post("/fleet/templates", response_class=HTMLResponse, dependencies=[Depends(require_permission("configure"))])
-async def fleet_templates_page_post(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/fleet/templates",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("configure"))],
+)
+async def fleet_templates_page_post(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     form = await read_form_data(request)
     locale = resolve_locale(request)
     try:
@@ -2442,60 +3076,126 @@ async def fleet_templates_page_post(request: Request, context: ApplicationContex
             target_group=str(form.get("target_group") or "").strip() or None,
             target_nodes=str(form.get("target_nodes") or ""),
         )
-        notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.template_saved"))
-        return await render_fleet_templates_page(request, context, notice=notice, result=result)
+        notice = make_notice(
+            NOTICE_KIND_SUCCESS, translate(locale, "notice.template_saved")
+        )
+        return await render_fleet_templates_page(
+            request, context, notice=notice, result=result
+        )
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
         return await render_fleet_templates_page(request, context, notice=notice)
 
 
-@router.get("/fleet/nodes/{node_name}", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def fleet_node_detail_page(node_name: str, request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/fleet/nodes/{node_name}",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def fleet_node_detail_page(
+    node_name: str, request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_fleet_node_detail_page(request, context, node_name)
 
 
-@router.get("/fleet/tags", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def fleet_tags_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/fleet/tags",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def fleet_tags_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_fleet_tags_page(request, context)
 
 
-@router.get("/fleet/health", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def fleet_health_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/fleet/health",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def fleet_health_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_fleet_health_page(request, context)
 
 
-@router.get("/fleet/events", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def fleet_events_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/fleet/events",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def fleet_events_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_fleet_events_page(request, context)
 
 
-@router.get("/api-docs", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def api_docs_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/api-docs",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def api_docs_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_api_docs_page(request, context)
 
 
-@router.get("/security", response_class=HTMLResponse, dependencies=[Depends(require_permission("security"))])
-async def security_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/security",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("security"))],
+)
+async def security_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_security_page(request, context)
 
 
-@router.get("/audit", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def audit_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/audit",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def audit_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_audit_page(request, context)
 
 
-@router.get("/config", response_class=HTMLResponse, dependencies=[Depends(require_permission("configure"))])
-async def config_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/config",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("configure"))],
+)
+async def config_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_config_page(request, context)
 
 
-@router.get("/config/history", response_class=HTMLResponse, dependencies=[Depends(require_permission("configure"))])
-async def config_history_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/config/history",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("configure"))],
+)
+async def config_history_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_config_history_page(request, context)
 
 
-@router.post("/config/history", response_class=HTMLResponse, dependencies=[Depends(require_permission("configure"))])
-async def config_history_page_post(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/config/history",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("configure"))],
+)
+async def config_history_page_post(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     form = await read_form_data(request)
     locale = resolve_locale(request)
     action = str(form.get("action", "restore")).lower()
@@ -2512,20 +3212,42 @@ async def config_history_page_post(request: Request, context: ApplicationContext
             actor="config_history_web",
             summary=f"restored revision #{revision_id}",
         )
-        notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.config_restored"))
-        return await render_config_history_page(request, context, notice=notice, result=result)
+        notice = make_notice(
+            NOTICE_KIND_SUCCESS, translate(locale, "notice.config_restored")
+        )
+        return await render_config_history_page(
+            request, context, notice=notice, result=result
+        )
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
         return await render_config_history_page(request, context, notice=notice)
 
 
-@router.get("/config/review/{revision_id}", response_class=HTMLResponse, dependencies=[Depends(require_permission("configure"))])
-async def config_review_page(revision_id: int, request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/config/review/{revision_id}",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("configure"))],
+)
+async def config_review_page(
+    revision_id: int,
+    request: Request,
+    context: ApplicationContext = Depends(get_context),
+) -> HTMLResponse:
     return await render_config_review_page(request, context, revision_id)
 
 
-@router.post("/config/review/{revision_id}", response_class=HTMLResponse, dependencies=[Depends(require_permission("configure"))])
-async def config_review_page_post(revision_id: int, request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/config/review/{revision_id}",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("configure"))],
+)
+async def config_review_page_post(
+    revision_id: int,
+    request: Request,
+    context: ApplicationContext = Depends(get_context),
+) -> HTMLResponse:
     locale = resolve_locale(request)
     try:
         revision = context.config_version_service.get_revision(revision_id)
@@ -2537,15 +3259,29 @@ async def config_review_page_post(revision_id: int, request: Request, context: A
             actor="config_review_web",
             summary=f"restored revision #{revision_id}",
         )
-        notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.config_restored"))
-        return await render_config_review_page(request, context, revision_id, notice=notice, result=result)
+        notice = make_notice(
+            NOTICE_KIND_SUCCESS, translate(locale, "notice.config_restored")
+        )
+        return await render_config_review_page(
+            request, context, revision_id, notice=notice, result=result
+        )
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
-        return await render_config_review_page(request, context, revision_id, notice=notice)
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
+        return await render_config_review_page(
+            request, context, revision_id, notice=notice
+        )
 
 
-@router.post("/config", response_class=HTMLResponse, dependencies=[Depends(require_permission("configure"))])
-async def config_page_post(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/config",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("configure"))],
+)
+async def config_page_post(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     form = await read_form_data(request)
     action = str(form.get("action", "validate")).lower()
     raw_text = str(form.get("raw", ""))
@@ -2553,34 +3289,66 @@ async def config_page_post(request: Request, context: ApplicationContext = Depen
     try:
         if action == "validate":
             result = context.config_service.validate_raw(raw_text)
-            notice_key = "notice.config_valid" if result.get("valid") else "notice.config_invalid"
+            notice_key = (
+                "notice.config_valid"
+                if result.get("valid")
+                else "notice.config_invalid"
+            )
         elif action == "save":
             result = context.config_service.save_raw(raw_text)
-            notice_key = "notice.config_saved" if result.get("saved") else "notice.config_invalid"
-        elif action == "restart":
-            result = await context.node_service.restart(reason="web-config")
+            notice_key = (
+                "notice.config_saved"
+                if result.get("saved")
+                else "notice.config_invalid"
+            )
+        elif action in {"apply", "restart"}:
+            result = await context.apply_configuration()
             notice_key = "notice.node_restarted"
         else:
             raise ValueError(f"unsupported action: {action}")
         notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, notice_key))
-        return await render_config_page(request, context, raw_text=raw_text, notice=notice, result=result)
+        return await render_config_page(
+            request, context, raw_text=raw_text, notice=notice, result=result
+        )
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
-        return await render_config_page(request, context, raw_text=raw_text, notice=notice)
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
+        return await render_config_page(
+            request, context, raw_text=raw_text, notice=notice
+        )
 
 
-@router.get("/backup", response_class=HTMLResponse, dependencies=[Depends(require_permission("configure"))])
-async def backup_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/backup",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("configure"))],
+)
+async def backup_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_backup_page(request, context)
 
 
-@router.get("/backup/detail", response_class=HTMLResponse, dependencies=[Depends(require_permission("configure"))])
-async def backup_detail_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/backup/detail",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("configure"))],
+)
+async def backup_detail_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_backup_detail_page(request, context)
 
 
-@router.post("/backup", response_class=HTMLResponse, dependencies=[Depends(require_permission("configure"))])
-async def backup_page_post(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/backup",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("configure"))],
+)
+async def backup_page_post(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     form = await read_form_data(request)
     action = str(form.get("action", "export")).lower()
     locale = resolve_locale(request)
@@ -2592,12 +3360,14 @@ async def backup_page_post(request: Request, context: ApplicationContext = Depen
             notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, notice_key))
         elif action == "import":
             archive_path = str(form.get("archive_path", "")).strip()
-            result = context.backup_service.import_archive(archive_path)
+            result = await context.restore_backup(archive_path)
             notice_key = "notice.backup_imported"
             notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, notice_key))
         elif action == "snapshot":
             destination_path = str(form.get("destination_path", "")).strip() or None
-            result = context.backup_service.create_snapshot(destination_path=destination_path)
+            result = context.backup_service.create_snapshot(
+                destination_path=destination_path
+            )
             notice = make_notice(NOTICE_KIND_SUCCESS, "Snapshot created.")
         elif action == "prune":
             try:
@@ -2606,27 +3376,47 @@ async def backup_page_post(request: Request, context: ApplicationContext = Depen
                 keep = 10
             max_age_value = str(form.get("max_age_days") or "").strip()
             max_age_days = int(max_age_value) if max_age_value else None
-            result = context.backup_service.prune_snapshots(keep=keep, max_age_days=max_age_days)
+            result = context.backup_service.prune_snapshots(
+                keep=keep, max_age_days=max_age_days
+            )
             notice = make_notice(NOTICE_KIND_SUCCESS, "Snapshots pruned.")
         elif action == "dr_helper":
             archive_path = str(form.get("archive_path", "")).strip() or None
-            result = context.backup_service.disaster_recovery_helper(archive_path=archive_path)
-            notice = make_notice(NOTICE_KIND_SUCCESS, "Disaster recovery checklist prepared.")
+            result = context.backup_service.disaster_recovery_helper(
+                archive_path=archive_path
+            )
+            notice = make_notice(
+                NOTICE_KIND_SUCCESS, "Disaster recovery checklist prepared."
+            )
         else:
             raise ValueError(f"unsupported action: {action}")
         return await render_backup_page(request, context, notice=notice, result=result)
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
         return await render_backup_page(request, context, notice=notice)
 
 
-@router.get("/system", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def system_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/system",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def system_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_system_page(request, context)
 
 
-@router.post("/system", response_class=HTMLResponse, dependencies=[Depends(require_permission("operate"))])
-async def system_page_post(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/system",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("operate"))],
+)
+async def system_page_post(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     form = await read_form_data(request)
     action = str(form.get("action", "restart")).lower()
     locale = resolve_locale(request)
@@ -2645,7 +3435,9 @@ async def system_page_post(request: Request, context: ApplicationContext = Depen
         notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, notice_key))
         return await render_system_page(request, context, notice=notice, result=result)
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
         return await render_system_page(request, context, notice=notice)
 
 
@@ -2655,7 +3447,9 @@ async def render_bridges_page(
     notice: dict[str, str] | None = None,
 ) -> HTMLResponse:
     summary = await context.node_service.status_summary(persist=False)
-    bridges = context.bridge_catalog_service.list_bridges(str(summary.get("runtime_status") or "unknown"))
+    bridges = context.bridge_catalog_service.list_bridges(
+        str(summary.get("runtime_status") or "unknown")
+    )
     for bridge in bridges:
         bridge["tone"] = build_tone(bridge.get("health") or bridge.get("status"))
         bridge["detail_href"] = build_href(request, f"/bridges/{bridge['name']}")
@@ -2687,13 +3481,16 @@ async def render_bridge_detail_page(
     result: dict | None = None,
 ) -> HTMLResponse:
     summary = await context.node_service.status_summary(persist=False)
-    bridge = context.bridge_catalog_service.get_bridge(name, str(summary.get("runtime_status") or "unknown"))
+    bridge = context.bridge_catalog_service.get_bridge(
+        name, str(summary.get("runtime_status") or "unknown")
+    )
     if bridge is None:
         locale = resolve_locale(request)
         response = await render_bridges_page(
             request,
             context,
-            notice=notice or make_notice(NOTICE_KIND_ERROR, translate(locale, "bridges.not_found")),
+            notice=notice
+            or make_notice(NOTICE_KIND_ERROR, translate(locale, "bridges.not_found")),
         )
         response.status_code = 404
         return response
@@ -2712,7 +3509,9 @@ async def render_bridge_detail_page(
         summary=summary,
         bridge=bridge,
         bridges_href=build_href(request, "/bridges"),
-        plugin_href=build_href(request, f"/plugins/{bridge['plugin_name']}") if bridge.get("configured") else None,
+        plugin_href=build_href(request, f"/plugins/{bridge['plugin_name']}")
+        if bridge.get("configured")
+        else None,
         plugin_sources_href=build_href(request, "/plugin-sources"),
         header_state=build_header_state(summary),
         shell_summary=summary,
@@ -2733,9 +3532,11 @@ async def render_metrics_dashboard_page(
     interfaces = list(summary.get("interfaces", []))
     for interface in interfaces:
         metrics = dict(interface.get("metrics") or {})
-        interface["tone"] = build_tone(interface.get("status") or interface.get("health_status"))
-        interface["rx_packets_display"] = format_counter(metrics.get("rx_packets"))
-        interface["tx_packets_display"] = format_counter(metrics.get("tx_packets"))
+        interface["tone"] = build_tone(
+            interface.get("status") or interface.get("health_status")
+        )
+        interface["rx_bytes_display"] = format_counter(metrics.get("rx_bytes"))
+        interface["tx_bytes_display"] = format_counter(metrics.get("tx_bytes"))
         interface["error_count_display"] = format_counter(metrics.get("error_count"))
     return render_page(
         request,
@@ -2761,10 +3562,37 @@ async def render_alerts_page(
     notice: dict[str, str] | None = None,
 ) -> HTMLResponse:
     summary = await context.node_service.status_summary(persist=False)
-    alert_snapshot = await context.alert_service.refresh(summary)
+    alert_snapshot = context.alert_service.snapshot(summary)
     alerts = list(alert_snapshot.get("alerts") or [])
-    alerts = sorted(alerts, key=lambda item: str(item.get("created_at") or ""), reverse=True)
+    alerts = sorted(
+        alerts, key=lambda item: str(item.get("created_at") or ""), reverse=True
+    )
     for alert in alerts:
+        locale = resolve_locale(request)
+        alert["title"] = translate_diagnostic(locale, str(alert.get("title") or ""))
+        alert["message"] = translate_diagnostic(locale, str(alert.get("message") or ""))
+        if alert.get("rule_source") == "runtime_status":
+            alert["message"] = translate(
+                locale,
+                "alert.runtime_state",
+                state=translate_value(locale, summary.get("runtime_status")),
+            )
+        elif alert.get("rule_source") == "node_health":
+            alert["message"] = translate(
+                locale,
+                "alert.health_state",
+                state=translate_value(locale, summary.get("health_status")),
+            )
+        elif alert.get("rule_source") == "interface_runtime":
+            alert["title"] = translate(
+                locale, "alert.interface_title", name=alert.get("interface_name")
+            )
+            alert["message"] = translate(
+                locale,
+                "alert.interface_message",
+                state=translate_value(locale, alert.get("interface_status")),
+                health=translate_value(locale, alert.get("interface_health")),
+            )
         alert["tone"] = build_tone(alert.get("severity"))
     alert_history = list(alert_snapshot.get("history") or [])
     for row in alert_history:
@@ -2777,7 +3605,9 @@ async def render_alerts_page(
         notice=notice,
         summary=summary,
         alerts=alerts,
-        alert_summary=dict(alert_snapshot.get("summary") or context.alert_service.summarize(alerts)),
+        alert_summary=dict(
+            alert_snapshot.get("summary") or context.alert_service.summarize(alerts)
+        ),
         alert_history=alert_history,
         alert_hooks=dict(alert_snapshot.get("hooks") or {}),
         rule_sources=list(alert_snapshot.get("rule_sources") or []),
@@ -2807,56 +3637,106 @@ async def render_diagnostics_page(
         diagnostics=diagnostics,
         recent_events=recent_events,
         restart_history=restart_history,
-        latest_revision_pretty=json.dumps(latest_revision, ensure_ascii=False, indent=2) if latest_revision else None,
+        latest_revision_pretty=json.dumps(latest_revision, ensure_ascii=False, indent=2)
+        if latest_revision
+        else None,
         header_state=build_header_state(summary),
         shell_summary=summary,
     )
 
 
-@router.get("/bridges", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def bridges_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/bridges",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def bridges_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_bridges_page(request, context)
 
 
-@router.get("/bridges/{name}", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def bridge_detail_page(name: str, request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/bridges/{name}",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def bridge_detail_page(
+    name: str, request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_bridge_detail_page(request, context, name)
 
 
-@router.post("/bridges/{name}", response_class=HTMLResponse, dependencies=[Depends(require_permission("operate"))])
-async def bridge_detail_page_post(name: str, request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/bridges/{name}",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("operate"))],
+)
+async def bridge_detail_page_post(
+    name: str, request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     form = await read_form_data(request)
     action = str(form.get("action") or "sync").lower()
     locale = resolve_locale(request)
     summary = await context.node_service.status_summary(persist=False)
     try:
-        result = context.bridge_catalog_service.control(name, action, str(summary.get("runtime_status") or "unknown"))
-        notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.bridge_updated"))
-        return await render_bridge_detail_page(request, context, name, notice=notice, result=result)
+        result = context.bridge_catalog_service.control(
+            name, action, str(summary.get("runtime_status") or "unknown")
+        )
+        notice = make_notice(
+            NOTICE_KIND_SUCCESS, translate(locale, "notice.bridge_updated")
+        )
+        return await render_bridge_detail_page(
+            request, context, name, notice=notice, result=result
+        )
     except LookupError as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
         response = await render_bridges_page(request, context, notice=notice)
         response.status_code = 404
         return response
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
-        response = await render_bridge_detail_page(request, context, name, notice=notice)
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
+        response = await render_bridge_detail_page(
+            request, context, name, notice=notice
+        )
         response.status_code = 400
         return response
 
 
-@router.get("/metrics-dashboard", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def metrics_dashboard_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/metrics-dashboard",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def metrics_dashboard_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_metrics_dashboard_page(request, context)
 
 
-@router.get("/alerts", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def alerts_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/alerts",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def alerts_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_alerts_page(request, context)
 
 
-@router.get("/diagnostics", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def diagnostics_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/diagnostics",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def diagnostics_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_diagnostics_page(request, context)
 
 
@@ -2965,7 +3845,23 @@ async def render_network_insights_page(
     summary = await context.node_service.status_summary(persist=False)
     insights = await context.topology_service.insights()
     for item in insights.get("findings", []):
+        code = item.get("code")
+        if code:
+            item["title"] = translate(
+                resolve_locale(request),
+                f"insight.{code}.title",
+                **item.get("parameters", {}),
+            )
+            item["message"] = translate(
+                resolve_locale(request),
+                f"insight.{code}.message",
+                **item.get("parameters", {}),
+            )
         item["tone"] = build_tone(item.get("severity"))
+    insights["recommendations"] = [
+        translate(resolve_locale(request), f"insight.{code}.recommendation")
+        for code in insights.get("recommendation_codes", [])
+    ]
     return render_page(
         request,
         context,
@@ -2990,18 +3886,26 @@ async def render_path_changes_page(
 ) -> HTMLResponse:
     summary = await context.node_service.status_summary(persist=False)
     try:
-        recent_limit = max(1, min(int(request.query_params.get("recent_limit", "80")), 500))
+        recent_limit = max(
+            1, min(int(request.query_params.get("recent_limit", "80")), 500)
+        )
     except ValueError:
         recent_limit = 80
     try:
-        since_minutes = max(0, min(int(request.query_params.get("since_minutes", "10080")), 43200))
+        since_minutes = max(
+            0, min(int(request.query_params.get("since_minutes", "10080")), 43200)
+        )
     except ValueError:
         since_minutes = 10080
 
-    path_changes = await context.topology_service.path_changes(recent_limit=recent_limit, since_minutes=since_minutes)
+    path_changes = await context.topology_service.path_changes(
+        recent_limit=recent_limit, since_minutes=since_minutes
+    )
     for item in path_changes.get("recent_changes", []):
         change_type = str(item.get("change_type") or "changed")
-        item["tone"] = build_tone("warning" if change_type in {"changed", "removed"} else "info")
+        item["tone"] = build_tone(
+            "warning" if change_type in {"changed", "removed"} else "info"
+        )
     for item in path_changes.get("destinations", []):
         if int(item.get("volatility_score") or 0) >= 70:
             item["tone"] = "danger"
@@ -3028,33 +3932,69 @@ async def render_path_changes_page(
     )
 
 
-@router.get("/topology", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def topology_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/topology",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def topology_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_topology_page(request, context)
 
 
-@router.get("/network-map", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def network_map_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/network-map",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def network_map_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_network_map_page(request, context)
 
 
-@router.get("/route-heatmap", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def route_heatmap_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/route-heatmap",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def route_heatmap_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_route_heatmap_page(request, context)
 
 
-@router.get("/critical-nodes", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def critical_nodes_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/critical-nodes",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def critical_nodes_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_critical_nodes_page(request, context)
 
 
-@router.get("/network-insights", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def network_insights_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/network-insights",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def network_insights_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_network_insights_page(request, context)
 
 
-@router.get("/path-changes", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def path_changes_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/path-changes",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def path_changes_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_path_changes_page(request, context)
 
 
@@ -3100,13 +4040,23 @@ async def render_remote_logs_page(
         limit = max(1, min(int(request.query_params.get("limit", "100")), 500))
     except ValueError:
         limit = 100
-    entries = await context.remote_log_service.list_entries(node_name=node_name or None, level=level or None, limit=limit)
+    entries = await context.remote_log_service.list_entries(
+        node_name=node_name or None, level=level or None, limit=limit
+    )
     entries = decorate_event_rows(entries)
     nodes = await context.fleet_service.list_nodes()
     node_options = sorted(
         {
-            *[str(item.get("node_name") or "") for item in nodes if item.get("node_name")],
-            *[str(item.get("node_name") or "") for item in entries if item.get("node_name")],
+            *[
+                str(item.get("node_name") or "")
+                for item in nodes
+                if item.get("node_name")
+            ],
+            *[
+                str(item.get("node_name") or "")
+                for item in entries
+                if item.get("node_name")
+            ],
         }
     )
     filters = {"level": level, "node_name": node_name, "limit": limit}
@@ -3159,13 +4109,25 @@ async def render_upgrade_page(
     )
 
 
-@router.get("/rollout", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def rollout_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/rollout",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def rollout_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_rollout_page(request, context)
 
 
-@router.post("/rollout", response_class=HTMLResponse, dependencies=[Depends(require_permission("configure"))])
-async def rollout_page_post(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/rollout",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("configure"))],
+)
+async def rollout_page_post(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     form = await read_form_data(request)
     locale = resolve_locale(request)
     try:
@@ -3176,20 +4138,36 @@ async def rollout_page_post(request: Request, context: ApplicationContext = Depe
             target_nodes=str(form.get("target_nodes", "")).strip() or None,
             actor="web",
         )
-        notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, "notice.rollout_created"))
+        notice = make_notice(
+            NOTICE_KIND_SUCCESS, translate(locale, "notice.rollout_created")
+        )
         return await render_rollout_page(request, context, notice=notice, result=result)
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
         return await render_rollout_page(request, context, notice=notice)
 
 
-@router.get("/remote-logs", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def remote_logs_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/remote-logs",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def remote_logs_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_remote_logs_page(request, context)
 
 
-@router.post("/remote-logs", response_class=HTMLResponse, dependencies=[Depends(require_permission("operate"))])
-async def remote_logs_page_post(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/remote-logs",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("operate"))],
+)
+async def remote_logs_page_post(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     form = await read_form_data(request)
     locale = resolve_locale(request)
     action = str(form.get("action", "sync")).strip().lower()
@@ -3202,25 +4180,46 @@ async def remote_logs_page_post(request: Request, context: ApplicationContext = 
             limit = 100
         result = await context.remote_log_service.sync_nodes(limit=limit)
         notice = make_notice(NOTICE_KIND_SUCCESS, "Remote log sync completed.")
-        return await render_remote_logs_page(request, context, notice=notice, result=result)
+        return await render_remote_logs_page(
+            request, context, notice=notice, result=result
+        )
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
         response = await render_remote_logs_page(request, context, notice=notice)
         response.status_code = 400
         return response
 
 
-@router.get("/upgrade", response_class=HTMLResponse, dependencies=[Depends(require_permission("read"))])
-async def upgrade_page(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.get(
+    "/upgrade",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("read"))],
+)
+async def upgrade_page(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     return await render_upgrade_page(request, context)
 
 
-@router.post("/upgrade", response_class=HTMLResponse, dependencies=[Depends(require_permission("operate"))])
-async def upgrade_page_post(request: Request, context: ApplicationContext = Depends(get_context)) -> HTMLResponse:
+@router.post(
+    "/upgrade",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_permission("operate"))],
+)
+async def upgrade_page_post(
+    request: Request, context: ApplicationContext = Depends(get_context)
+) -> HTMLResponse:
     form = await read_form_data(request)
     locale = resolve_locale(request)
     action = str(form.get("action", "upgrade") or "upgrade").strip().lower()
-    enable_maintenance = str(form.get("enable_maintenance", "")).lower() in {"1", "true", "on", "yes"}
+    enable_maintenance = str(form.get("enable_maintenance", "")).lower() in {
+        "1",
+        "true",
+        "on",
+        "yes",
+    }
     try:
         result = await context.upgrade_service.schedule_operation(
             action=action,
@@ -3232,9 +4231,15 @@ async def upgrade_page_post(request: Request, context: ApplicationContext = Depe
             enable_maintenance=enable_maintenance,
             actor="web",
         )
-        notice_key = "notice.rollback_scheduled" if action == "rollback" else "notice.upgrade_scheduled"
+        notice_key = (
+            "notice.rollback_scheduled"
+            if action == "rollback"
+            else "notice.upgrade_scheduled"
+        )
         notice = make_notice(NOTICE_KIND_SUCCESS, translate(locale, notice_key))
         return await render_upgrade_page(request, context, notice=notice, result=result)
     except Exception as exc:
-        notice = make_notice(NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc)))
+        notice = make_notice(
+            NOTICE_KIND_ERROR, translate(locale, "notice.action_failed", error=str(exc))
+        )
         return await render_upgrade_page(request, context, notice=notice)

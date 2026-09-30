@@ -21,7 +21,7 @@
         <th>{{ t("field.routes") }}</th>
         <th>{{ t("topology.average_hops") }}</th>
         <th>{{ t("topology.intensity") }}</th>
-        <th>RX / TX</th>
+        <th>{{ t('field.rx_tx') }}</th>
       </tr>
     </thead>
     <tbody>
@@ -33,7 +33,7 @@
         <td>{{ row.route_count }} ({{ row.route_share }}%)</td>
         <td>{{ row.avg_hops }} / {{ row.max_hops }}</td>
         <td>{{ row.intensity }}</td>
-        <td>{{ row.rx_packets }} / {{ row.tx_packets }}</td>
+        <td>{{ row.rx_bytes }} / {{ row.tx_bytes }}</td>
       </tr>
       {% else %}
       <tr><td colspan="7" class="empty-state">-</td></tr>

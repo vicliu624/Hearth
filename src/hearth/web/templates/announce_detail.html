@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 
 {% block content %}
 <section class="page-hero">
@@ -64,7 +64,7 @@
     <dl class="system-grid">
       <dt>{{ t("field.peer") }}</dt>
       <dd>{% if peer_detail_href %}<a class="inline-link" href="{{ peer_detail_href }}">{{ related_peer.display_name or related_peer.peer_hash }}</a>{% else %}{{ related_peer.display_name or related_peer.peer_hash }}{% endif %}</dd>
-      <dt>Hash</dt>
+      <dt>{{ t('field.hash') }}</dt>
       <dd>{{ related_peer.peer_hash }}</dd>
       <dt>{{ t("field.last_seen") }}</dt>
       <dd>{{ tr(related_peer.last_seen_at) }}</dd>

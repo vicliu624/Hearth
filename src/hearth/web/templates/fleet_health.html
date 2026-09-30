@@ -1,11 +1,11 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 
 {% block content %}
 <section class="page-hero">
   <div>
     <p class="page-kicker">{{ t("nav.fleet") }}</p>
     <h1>{{ t("page.fleet_health") }}</h1>
-    <p class="page-subtitle">{{ page_total }} {{ t("fleet.total_nodes") }}</p>
+    <p class="page-subtitle">{{ t("count.nodes", count=page_total) }}</p>
   </div>
   <div class="inline-form">
     <a class="button-link" href="{{ fleet_href }}">{{ t("page.fleet") }}</a>
@@ -17,9 +17,9 @@
 
 <section class="metric-grid metric-grid--5">
   <article class="metric-card"><p class="metric-card__eyebrow">{{ t("fleet.total_nodes") }}</p><h2>{{ health.summary.total_nodes }}</h2><p class="metric-card__subtext">{{ t("fleet.health_summary") }}</p></article>
-  <article class="metric-card"><p class="metric-card__eyebrow">healthy</p><h2>{{ health.summary.healthy }}</h2><p class="metric-card__subtext">{{ t("field.health") }}</p></article>
-  <article class="metric-card metric-card--warning"><p class="metric-card__eyebrow">warning</p><h2>{{ health.summary.warning }}</h2><p class="metric-card__subtext">{{ t("field.health") }}</p></article>
-  <article class="metric-card metric-card--danger"><p class="metric-card__eyebrow">critical</p><h2>{{ health.summary.critical }}</h2><p class="metric-card__subtext">{{ t("field.health") }}</p></article>
+  <article class="metric-card"><p class="metric-card__eyebrow">{{ tv("healthy") }}</p><h2>{{ health.summary.healthy }}</h2><p class="metric-card__subtext">{{ t("field.health") }}</p></article>
+  <article class="metric-card metric-card--warning"><p class="metric-card__eyebrow">{{ tv("warning") }}</p><h2>{{ health.summary.warning }}</h2><p class="metric-card__subtext">{{ t("field.health") }}</p></article>
+  <article class="metric-card metric-card--danger"><p class="metric-card__eyebrow">{{ tv("critical") }}</p><h2>{{ health.summary.critical }}</h2><p class="metric-card__subtext">{{ t("field.health") }}</p></article>
   <article class="metric-card"><p class="metric-card__eyebrow">{{ t("fleet.at_risk_nodes") }}</p><h2>{{ health.summary.at_risk }}</h2><p class="metric-card__subtext">{{ t("field.status") }}</p></article>
 </section>
 
@@ -61,9 +61,9 @@
         <tr>
           <th>{{ t("field.group") }}</th>
           <th>{{ t("fleet.total_nodes") }}</th>
-          <th>healthy</th>
-          <th>warning</th>
-          <th>critical</th>
+          <th>{{ tv("healthy") }}</th>
+          <th>{{ tv("warning") }}</th>
+          <th>{{ tv("critical") }}</th>
         </tr>
       </thead>
       <tbody>

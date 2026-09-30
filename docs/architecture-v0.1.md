@@ -1,6 +1,9 @@
 ﻿# Hearth Architecture v0.1
 
-This document describes the current runtime architecture of Hearth as implemented in the repository today.
+This document is the historical v0.1 baseline. For v0.2 runtime ownership,
+configuration activation, observation fidelity, and recovery guarantees, see
+[the reliability contract](reliability-contract.md), [the upgrade guide](upgrade-v0.2.md),
+and [the changelog](../CHANGELOG.md).
 
 It focuses on the **control plane** around a Personal Reticulum Transport Node: how the application is wired, how data moves through the system, and where major operational responsibilities live.
 

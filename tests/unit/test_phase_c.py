@@ -84,7 +84,7 @@ port = 4242
         logs_page = client.get("/logs")
 
     assert dashboard.status_code == 200
-    assert "最近节点" in dashboard.text
-    assert "最近广播" in dashboard.text
+    assert "最近观测的对端节点" in dashboard.text
+    assert "最近通告" in dashboard.text
     assert logs_page.status_code == 200
     assert "日志列表" in logs_page.text

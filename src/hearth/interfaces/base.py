@@ -129,12 +129,13 @@ class InterfaceDriver(ABC):
             last_seen_at=self._last_seen_at,
             metrics=await self.get_metrics(),
             last_error=self._last_error,
+            role=self.role,
         )
 
     async def get_metrics(self) -> dict[str, int]:
         return {
-            "rx_packets": 0,
-            "tx_packets": 0,
+            "rx_bytes": 0,
+            "tx_bytes": 0,
             "error_count": self._error_count,
             "restart_count": self._restart_count,
             "health_check_count": self._health_check_count,
@@ -147,4 +148,3 @@ class BasicInterfaceDriver(InterfaceDriver):
     @property
     def type(self) -> str:
         return self.driver_type
-

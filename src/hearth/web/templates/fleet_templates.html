@@ -5,7 +5,7 @@
   <div>
     <p class="page-kicker">{{ t("nav.fleet") }}</p>
     <h1>{{ t("page.templates") }}</h1>
-    <p class="page-subtitle">{{ page_total }} {{ t("fleet.templates_total") }}</p>
+    <p class="page-subtitle">{{ t("count.templates", count=page_total) }}</p>
   </div>
   <div class="inline-form">
     <a class="button-link" href="{{ fleet_href }}">{{ t("page.fleet") }}</a>

@@ -12,6 +12,7 @@ Environment=PYTHONUNBUFFERED=1
 Environment=HEARTH_CONFIG=/etc/hearth/hearth.toml
 ExecStart=/opt/hearth/.venv/bin/hearth-api
 Restart=always
+KillMode=process
 RestartSec=5
 
 [Install]

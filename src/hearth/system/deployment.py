@@ -1,10 +1,11 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import platform
 from pathlib import Path
 from textwrap import dedent
 
 from hearth.core.config import HearthSettings
+from hearth import __version__
 
 
 DEFAULT_SYSTEMD_USER = "hearth"
@@ -18,9 +19,12 @@ DEFAULT_DOCKER_CONFIG_DIR = "/data"
 DEFAULT_DOCKER_PORT = 8480
 
 
-def render_debian_control(*, package_name: str = "hearth", version: str = "0.1.0") -> str:
-    return dedent(
-        f"""
+def render_debian_control(
+    *, package_name: str = "hearth", version: str = __version__
+) -> str:
+    return (
+        dedent(
+            f"""
         Source: {package_name}
         Section: net
         Priority: optional
@@ -35,12 +39,17 @@ def render_debian_control(*, package_name: str = "hearth", version: str = "0.1.0
          configuration, and web administration for personal Reticulum nodes.
         Version: {version}
         """
-    ).strip() + "\n"
+        ).strip()
+        + "\n"
+    )
 
 
-def render_appliance_manifest(*, image_name: str = "hearth-appliance", version: str = "0.1.0") -> str:
-    return dedent(
-        f"""
+def render_appliance_manifest(
+    *, image_name: str = "hearth-appliance", version: str = __version__
+) -> str:
+    return (
+        dedent(
+            f"""
         image: {image_name}
         version: {version}
         base: debian-bookworm
@@ -56,12 +65,15 @@ def render_appliance_manifest(*, image_name: str = "hearth-appliance", version: 
         ports:
           - 8480/tcp
         """
-    ).strip() + "\n"
+        ).strip()
+        + "\n"
+    )
 
 
 def render_openwrt_makefile(*, package_name: str = "hearth") -> str:
-    return dedent(
-        f"""
+    return (
+        dedent(
+            f"""
         include $(TOPDIR)/rules.mk
 
         PKG_NAME:={package_name}
@@ -82,12 +94,15 @@ def render_openwrt_makefile(*, package_name: str = "hearth") -> str:
 
         $(eval $(call BuildPackage,{package_name}))
         """
-    ).strip() + "\n"
+        ).strip()
+        + "\n"
+    )
 
 
 def render_migration_plan(*, from_version: str, to_version: str) -> str:
-    return dedent(
-        f"""
+    return (
+        dedent(
+            f"""
         from_version: {from_version}
         to_version: {to_version}
         steps:
@@ -98,19 +113,49 @@ def render_migration_plan(*, from_version: str, to_version: str) -> str:
           - Restart Hearth and verify health, interfaces, peers, and routes.
           - Keep the pre-upgrade backup until rollback is no longer needed.
         """
-    ).strip() + "\n"
+        ).strip()
+        + "\n"
+    )
 
 
 def preflight_check(settings: HearthSettings) -> dict[str, object]:
     config_path = settings.config_path
     checks = [
-        {"name": "config_path", "ok": bool(config_path), "detail": str(config_path) if config_path else None},
-        {"name": "data_dir", "ok": settings.data_dir.exists(), "detail": str(settings.data_dir)},
-        {"name": "runtime_dir", "ok": settings.runtime_dir.exists(), "detail": str(settings.runtime_dir)},
-        {"name": "reticulum_config_dir", "ok": settings.reticulum_config_path.exists(), "detail": str(settings.reticulum_config_path)},
-        {"name": "identity_parent", "ok": settings.identity_path.parent.exists(), "detail": str(settings.identity_path.parent)},
-        {"name": "python_version", "ok": tuple(map(int, platform.python_version_tuple()[:2])) >= (3, 12), "detail": platform.python_version()},
-        {"name": "interfaces_configured", "ok": len(settings.interfaces) >= 1, "detail": len(settings.interfaces)},
+        {
+            "name": "config_path",
+            "ok": bool(config_path),
+            "detail": str(config_path) if config_path else None,
+        },
+        {
+            "name": "data_dir",
+            "ok": settings.data_dir.exists(),
+            "detail": str(settings.data_dir),
+        },
+        {
+            "name": "runtime_dir",
+            "ok": settings.runtime_dir.exists(),
+            "detail": str(settings.runtime_dir),
+        },
+        {
+            "name": "reticulum_config_dir",
+            "ok": settings.reticulum_config_path.exists(),
+            "detail": str(settings.reticulum_config_path),
+        },
+        {
+            "name": "identity_parent",
+            "ok": settings.identity_path.parent.exists(),
+            "detail": str(settings.identity_path.parent),
+        },
+        {
+            "name": "python_version",
+            "ok": tuple(map(int, platform.python_version_tuple()[:2])) >= (3, 12),
+            "detail": platform.python_version(),
+        },
+        {
+            "name": "interfaces_configured",
+            "ok": len(settings.interfaces) >= 1,
+            "detail": len(settings.interfaces),
+        },
     ]
     return {"ok": all(bool(item["ok"]) for item in checks), "checks": checks}
 
@@ -123,8 +168,9 @@ def render_systemd_service(
     config_path: str = DEFAULT_SYSTEMD_CONFIG_PATH,
     exec_start: str = DEFAULT_SYSTEMD_EXEC_START,
 ) -> str:
-    return dedent(
-        f"""
+    return (
+        dedent(
+            f"""
         [Unit]
         Description=Hearth Personal Reticulum Node
         After=network-online.target
@@ -139,12 +185,15 @@ def render_systemd_service(
         Environment=HEARTH_CONFIG={config_path}
         ExecStart={exec_start}
         Restart=always
+        KillMode=process
         RestartSec=5
 
         [Install]
         WantedBy=multi-user.target
         """
-    ).strip() + "\n"
+        ).strip()
+        + "\n"
+    )
 
 
 def render_dockerfile(
@@ -153,8 +202,9 @@ def render_dockerfile(
     config_dir: str = DEFAULT_DOCKER_CONFIG_DIR,
     expose_port: int = DEFAULT_DOCKER_PORT,
 ) -> str:
-    return dedent(
-        f"""
+    return (
+        dedent(
+            f"""
         FROM {python_image}
 
         ENV PYTHONUNBUFFERED=1 \
@@ -166,14 +216,16 @@ def render_dockerfile(
         COPY src /app/src
 
         RUN python -m pip install --upgrade pip && \
-            pip install .
+            pip install '.[reticulum]'
 
         EXPOSE {expose_port}
         VOLUME ["{config_dir}"]
 
         CMD ["hearth-api"]
         """
-    ).strip() + "\n"
+        ).strip()
+        + "\n"
+    )
 
 
 def render_docker_compose(
@@ -183,8 +235,9 @@ def render_docker_compose(
     host_port: int = DEFAULT_DOCKER_PORT,
     container_port: int = DEFAULT_DOCKER_PORT,
 ) -> str:
-    return dedent(
-        f"""
+    return (
+        dedent(
+            f"""
         services:
           hearth:
             build:
@@ -200,12 +253,15 @@ def render_docker_compose(
             environment:
               HEARTH_CONFIG: {config_dir}/hearth.toml
         """
-    ).strip() + "\n"
+        ).strip()
+        + "\n"
+    )
 
 
 def render_dockerignore() -> str:
-    return dedent(
-        """
+    return (
+        dedent(
+            """
         .git
         .github
         .pytest_cache
@@ -222,7 +278,9 @@ def render_dockerignore() -> str:
         *.sqlite
         *.sqlite3
         "."""
-    ).strip() + "\n"
+        ).strip()
+        + "\n"
+    )
 
 
 def write_bundle(directory: Path) -> list[str]:

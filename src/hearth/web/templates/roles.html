@@ -5,7 +5,7 @@
   <div>
     <p class="page-kicker">{{ t("nav.roles") }}</p>
     <h1>{{ t("page.roles") }}</h1>
-    <p class="page-subtitle">{{ page_total }} roles · built-in and custom RBAC definitions</p>
+    <p class="page-subtitle">{{ t("roles.count_hint", count=page_total) }}</p>
   </div>
 </section>
 
@@ -13,19 +13,19 @@
   <section class="panel">
     <div class="panel-header">
       <div>
-        <h2>Create Role</h2>
-        <p>Custom roles are stored in the Hearth config and immediately become available to users and tokens.</p>
+        <h2>{{ t('roles.create') }}</h2>
+        <p>{{ t('roles.create_hint') }}</p>
       </div>
     </div>
     <form method="post" action="{{ request.url.path }}">
       <input type="hidden" name="action" value="create_role">
       <label class="toolbar-field stacked-field"><span>{{ t("field.name") }}</span><input type="text" name="name" placeholder="field_ops" required></label>
-      <label class="toolbar-field stacked-field"><span>{{ t("field.label") if t("field.label") != "field.label" else "Label" }}</span><input type="text" name="label" placeholder="Field Ops"></label>
-      <label class="toolbar-field stacked-field"><span>{{ t("field.summary") }}</span><input type="text" name="description" placeholder="Operate interfaces and maintenance windows"></label>
-      <label class="toolbar-field stacked-field"><span>Permissions</span><input type="text" name="permissions" placeholder="read,operate,maintenance"></label>
-      <p class="muted">Available permissions: {{ permission_options | join(', ') }}</p>
+      <label class="toolbar-field stacked-field"><span>{{ t("field.label") if t("field.label") != "field.label" else "Label" }}</span><input type="text" name="label" placeholder="{{ t('roles.label_placeholder') }}"></label>
+      <label class="toolbar-field stacked-field"><span>{{ t("field.summary") }}</span><input type="text" name="description" placeholder="{{ t('roles.description_placeholder') }}"></label>
+      <label class="toolbar-field stacked-field"><span>{{ t('roles.permissions') }}</span><input type="text" name="permissions" placeholder="read,operate,maintenance"></label>
+      <p class="muted">{{ t("roles.available_permissions", permissions=permission_options | join(', ')) }}</p>
       <div class="toolbar compact-toolbar">
-        <button type="submit">Create Role</button>
+        <button type="submit">{{ t('roles.create') }}</button>
       </div>
     </form>
   </section>
@@ -33,8 +33,8 @@
   <section class="panel">
     <div class="panel-header">
       <div>
-        <h2>Custom Roles</h2>
-        <p>Edit custom roles in place. Built-in roles remain visible below but are not editable here.</p>
+        <h2>{{ t('roles.custom') }}</h2>
+        <p>{{ t('roles.edit_hint') }}</p>
       </div>
     </div>
     {% for role in editable_roles %}
@@ -44,14 +44,14 @@
       <label class="toolbar-field stacked-field"><span>{{ t("field.name") }}</span><input type="text" value="{{ role.name }}" disabled></label>
       <label class="toolbar-field stacked-field"><span>{{ t("field.label") if t("field.label") != "field.label" else "Label" }}</span><input type="text" name="label" value="{{ role.label }}"></label>
       <label class="toolbar-field stacked-field"><span>{{ t("field.summary") }}</span><input type="text" name="description" value="{{ role.description }}"></label>
-      <label class="toolbar-field stacked-field"><span>Permissions</span><input type="text" name="permissions" value="{{ role.permissions | join(',') }}"></label>
+      <label class="toolbar-field stacked-field"><span>{{ t('roles.permissions') }}</span><input type="text" name="permissions" value="{{ role.permissions | join(',') }}"></label>
       <div class="toolbar compact-toolbar">
-        <button type="submit">Save Role</button>
-        <button type="submit" name="action" value="delete_role">Delete Role</button>
+        <button type="submit">{{ t('roles.save') }}</button>
+        <button type="submit" name="action" value="delete_role">{{ t('roles.delete') }}</button>
       </div>
     </form>
     {% else %}
-    <p class="empty-state">No custom roles yet.</p>
+    <p class="empty-state">{{ t('roles.no_custom') }}</p>
     {% endfor %}
   </section>
 </section>
@@ -59,18 +59,18 @@
 <section class="panel table-panel">
   <div class="panel-header">
     <div>
-      <h2>Role Matrix</h2>
-      <p>Use this table to review built-in and custom permission coverage.</p>
+      <h2>{{ t('roles.matrix') }}</h2>
+      <p>{{ t('roles.matrix_hint') }}</p>
     </div>
   </div>
   <table class="data-table compact-table">
     <thead>
       <tr>
         <th>{{ t("field.role") }}</th>
-        <th>Kind</th>
+        <th>{{ t('field.kind') }}</th>
         <th>{{ t("field.summary") }}</th>
         {% for permission in permission_columns %}
-        <th>{{ permission }}</th>
+        <th>{{ t("permission." + permission) }}<div class="muted">{{ permission }}</div></th>
         {% endfor %}
       </tr>
     </thead>
@@ -78,10 +78,10 @@
       {% for role in roles %}
       <tr>
         <td><strong>{{ role.label }}</strong><div class="muted">{{ role.name }}</div></td>
-        <td>{{ 'Built-in' if role.builtin else 'Custom' }}</td>
+        <td>{{ tv('builtin' if role.builtin else 'custom') }}</td>
         <td>{{ role.description or '-' }}</td>
         {% for permission in permission_columns %}
-        <td>{{ 'Yes' if permission in role.permissions else '-' }}</td>
+        <td>{{ tv('yes') if permission in role.permissions else '-' }}</td>
         {% endfor %}
       </tr>
       {% endfor %}
@@ -91,7 +91,7 @@
 
 {% if result %}
 <section class="panel">
-  <div class="panel-header"><div><h2>Result</h2></div></div>
+  <div class="panel-header"><div><h2>{{ t('field.result') }}</h2></div></div>
   <pre>{{ result | tojson(indent=2) }}</pre>
 </section>
 {% endif %}

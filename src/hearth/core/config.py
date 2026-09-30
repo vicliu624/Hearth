@@ -20,11 +20,13 @@ class ReticulumSettings(BaseModel):
     config_path: Path = Path("./reticulum-config")
     identity_path: Path = Path("./.data/identity")
     auto_start: bool = True
-    backend: Literal["mock_process", "external_process", "managed_rnsd"] = "mock_process"
+    backend: Literal["mock_process", "external_process", "managed_rnsd"] = (
+        "mock_process"
+    )
     command: list[str] = Field(default_factory=list)
-    heartbeat_interval_sec: int = 2
-    health_timeout_sec: int = 10
-    shutdown_timeout_sec: int = 5
+    heartbeat_interval_sec: int = Field(default=2, ge=1)
+    health_timeout_sec: int = Field(default=10, ge=1)
+    shutdown_timeout_sec: int = Field(default=5, ge=0)
     transport_enabled: bool = True
     shared_instance: bool = True
     instance_name: str = "default"
@@ -38,7 +40,7 @@ class ReticulumSettings(BaseModel):
 class WebSettings(BaseModel):
     enabled: bool = True
     host: str = "127.0.0.1"
-    port: int = 8480
+    port: int = Field(default=8480, ge=1, le=65535)
     auth_mode: str = "local_token"
 
 
@@ -49,20 +51,20 @@ class SecuritySettings(BaseModel):
 
 
 class MonitorSettings(BaseModel):
-    health_check_interval_sec: int = 15
-    metrics_refresh_sec: int = 10
+    health_check_interval_sec: int = Field(default=15, ge=1)
+    metrics_refresh_sec: int = Field(default=10, ge=1)
     watchdog_enabled: bool = True
     auto_restart_runtime: bool = True
     auto_restart_interface: bool = True
-    restart_cooldown_sec: int = 30
+    restart_cooldown_sec: int = Field(default=30, ge=0)
 
 
 class AlertsSettings(BaseModel):
     webhook_enabled: bool = False
     webhook_url: str | None = None
     include_resolved: bool = True
-    delivery_timeout_sec: int = 5
-    sync_interval_sec: int = 30
+    delivery_timeout_sec: int = Field(default=5, ge=1)
+    sync_interval_sec: int = Field(default=30, ge=1)
 
 
 class InterfaceSettings(BaseModel):
@@ -253,9 +255,13 @@ def parse_settings_text(raw_text: str) -> HearthSettings:
 
 def dump_settings(payload: HearthSettings | dict[str, Any]) -> str:
     if isinstance(payload, HearthSettings):
-        data = payload.model_dump(mode="json", exclude={"config_path"}, exclude_none=True)
+        data = payload.model_dump(
+            mode="json", exclude={"config_path"}, exclude_none=True
+        )
     else:
-        data = HearthSettings.model_validate(payload).model_dump(mode="json", exclude={"config_path"}, exclude_none=True)
+        data = HearthSettings.model_validate(payload).model_dump(
+            mode="json", exclude={"config_path"}, exclude_none=True
+        )
     return tomli_w.dumps(data)
 
 

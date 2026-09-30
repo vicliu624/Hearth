@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
 from datetime import datetime, timedelta
 import json
 from typing import Any, Iterator
+from pathlib import Path
+import sqlite3
+from hearth.core.operations import OperationLock
 
 from sqlalchemy import Select, create_engine, delete, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -30,15 +33,49 @@ class Database:
         connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
         self.engine = create_engine(url, future=True, connect_args=connect_args)
         self._session_factory = sessionmaker(bind=self.engine, expire_on_commit=False)
+        self.access = OperationLock(
+            Path(self.engine.url.database).with_suffix(".storage.lock")
+        )
+
+    def snapshot(self, destination: Path) -> None:
+        with (
+            self.access.hold(),
+            closing(sqlite3.connect(self.engine.url.database)) as source,
+            closing(sqlite3.connect(destination)) as target,
+        ):
+            source.backup(target)
+
+    def restore_snapshot(self, source_path: Path) -> None:
+        with self.access.hold():
+            self.dispose()
+            with (
+                closing(sqlite3.connect(source_path)) as source,
+                closing(sqlite3.connect(self.engine.url.database)) as target,
+            ):
+                source.backup(target)
 
     def init_schema(self) -> None:
         Base.metadata.create_all(self.engine)
+        # CREATE INDEX IF NOT EXISTS also upgrades existing installations.
+        with self.engine.begin() as connection:
+            connection.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_events_time ON events (created_at DESC)"
+            )
+            connection.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_metrics_time ON interface_metric_snapshots (captured_at, interface_name)"
+            )
 
     def dispose(self) -> None:
         self.engine.dispose()
 
     @contextmanager
     def session(self) -> Iterator[Session]:
+        with self.access.hold():
+            with self._session() as session:
+                yield session
+
+    @contextmanager
+    def _session(self) -> Iterator[Session]:
         session = self._session_factory()
         try:
             yield session
@@ -81,15 +118,17 @@ class Database:
             )
             record = session.scalar(statement)
             if record is None:
-                record = InterfaceRuntime(interface_name=payload["name"], interface_type=payload["type"])
+                record = InterfaceRuntime(
+                    interface_name=payload["name"], interface_type=payload["type"]
+                )
                 session.add(record)
             record.interface_type = payload["type"]
             record.enabled = payload["enabled"]
             record.status = payload["status"]
             record.health_status = payload["health_status"]
             record.last_seen_at = payload["last_seen_at"]
-            record.rx_packets = payload["metrics"].get("rx_packets", 0)
-            record.tx_packets = payload["metrics"].get("tx_packets", 0)
+            record.rx_bytes = payload["metrics"].get("rx_bytes", 0)
+            record.tx_bytes = payload["metrics"].get("tx_bytes", 0)
             record.error_count = payload["metrics"].get("error_count", 0)
             record.last_error = payload.get("last_error")
             record.updated_at = utcnow()
@@ -104,7 +143,9 @@ class Database:
                 "enabled": row.enabled,
                 "status": row.status,
                 "health_status": row.health_status,
-                "last_seen_at": row.last_seen_at.isoformat() if row.last_seen_at else None,
+                "last_seen_at": row.last_seen_at.isoformat()
+                if row.last_seen_at
+                else None,
                 "error_count": row.error_count,
                 "restart_count": 0,
                 "last_error": row.last_error,
@@ -120,14 +161,18 @@ class Database:
         recorded_at = captured_at or utcnow()
         retention_cutoff = recorded_at - timedelta(hours=48)
         with self.session() as session:
-            session.execute(delete(InterfaceMetricSnapshot).where(InterfaceMetricSnapshot.captured_at < retention_cutoff))
+            session.execute(
+                delete(InterfaceMetricSnapshot).where(
+                    InterfaceMetricSnapshot.captured_at < retention_cutoff
+                )
+            )
             for payload in payloads:
                 metrics = payload.get("metrics", {})
                 session.add(
                     InterfaceMetricSnapshot(
                         interface_name=payload["name"],
-                        rx_packets=int(metrics.get("rx_packets", 0) or 0),
-                        tx_packets=int(metrics.get("tx_packets", 0) or 0),
+                        rx_bytes=int(metrics.get("rx_bytes", 0) or 0),
+                        tx_bytes=int(metrics.get("tx_bytes", 0) or 0),
                         error_count=int(metrics.get("error_count", 0) or 0),
                         captured_at=recorded_at,
                     )
@@ -138,13 +183,16 @@ class Database:
             rows = session.scalars(
                 select(InterfaceMetricSnapshot)
                 .where(InterfaceMetricSnapshot.captured_at >= since)
-                .order_by(InterfaceMetricSnapshot.interface_name, InterfaceMetricSnapshot.captured_at)
+                .order_by(
+                    InterfaceMetricSnapshot.interface_name,
+                    InterfaceMetricSnapshot.captured_at,
+                )
             ).all()
         return [
             {
                 "interface_name": row.interface_name,
-                "rx_packets": row.rx_packets,
-                "tx_packets": row.tx_packets,
+                "rx_bytes": row.rx_bytes,
+                "tx_bytes": row.tx_bytes,
                 "error_count": row.error_count,
                 "captured_at": row.captured_at.isoformat(),
             }
@@ -200,7 +248,11 @@ class Database:
 
     def record_restart(self, target_type: str, target_name: str, reason: str) -> None:
         with self.session() as session:
-            session.add(RestartRecord(target_type=target_type, target_name=target_name, reason=reason))
+            session.add(
+                RestartRecord(
+                    target_type=target_type, target_name=target_name, reason=reason
+                )
+            )
 
     def list_restarts(
         self,
@@ -214,7 +266,9 @@ class Database:
                 statement = statement.where(RestartRecord.target_type == target_type)
             if target_name:
                 statement = statement.where(RestartRecord.target_name == target_name)
-            rows = session.scalars(statement.order_by(RestartRecord.created_at.desc()).limit(limit)).all()
+            rows = session.scalars(
+                statement.order_by(RestartRecord.created_at.desc()).limit(limit)
+            ).all()
         return [
             {
                 "target_type": row.target_type,
@@ -227,7 +281,9 @@ class Database:
 
     def upsert_peer(self, payload: dict[str, Any]) -> None:
         with self.session() as session:
-            statement: Select[tuple[PeerRecord]] = select(PeerRecord).where(PeerRecord.peer_hash == payload["peer_hash"])
+            statement: Select[tuple[PeerRecord]] = select(PeerRecord).where(
+                PeerRecord.peer_hash == payload["peer_hash"]
+            )
             record = session.scalar(statement)
             if record is None:
                 record = PeerRecord(peer_hash=payload["peer_hash"])
@@ -244,16 +300,21 @@ class Database:
                 ensure_ascii=False,
             )
 
-
     def list_peers(self, limit: int = 100) -> list[dict[str, Any]]:
         with self.session() as session:
-            rows = session.scalars(select(PeerRecord).order_by(PeerRecord.last_seen_at.desc()).limit(limit)).all()
+            rows = session.scalars(
+                select(PeerRecord).order_by(PeerRecord.last_seen_at.desc()).limit(limit)
+            ).all()
         return [
             {
                 "peer_hash": row.peer_hash,
                 "display_name": row.display_name,
-                "first_seen_at": row.first_seen_at.isoformat() if row.first_seen_at else None,
-                "last_seen_at": row.last_seen_at.isoformat() if row.last_seen_at else None,
+                "first_seen_at": row.first_seen_at.isoformat()
+                if row.first_seen_at
+                else None,
+                "last_seen_at": row.last_seen_at.isoformat()
+                if row.last_seen_at
+                else None,
                 "interface_name": row.via_interface,
                 "hops": row.hop_count,
                 "source_type": json.loads(row.metadata_json or "{}").get("source_type"),
@@ -263,18 +324,23 @@ class Database:
 
     def get_peer(self, peer_hash: str) -> dict[str, Any] | None:
         with self.session() as session:
-            row = session.scalar(select(PeerRecord).where(PeerRecord.peer_hash == peer_hash))
+            row = session.scalar(
+                select(PeerRecord).where(PeerRecord.peer_hash == peer_hash)
+            )
         if row is None:
             return None
         return {
             "peer_hash": row.peer_hash,
             "display_name": row.display_name,
-            "first_seen_at": row.first_seen_at.isoformat() if row.first_seen_at else None,
+            "first_seen_at": row.first_seen_at.isoformat()
+            if row.first_seen_at
+            else None,
             "last_seen_at": row.last_seen_at.isoformat() if row.last_seen_at else None,
             "interface_name": row.via_interface,
             "hops": row.hop_count,
             "source_type": json.loads(row.metadata_json or "{}").get("source_type"),
         }
+
     def replace_routes(self, payloads: list[dict[str, Any]]) -> None:
         destination_hashes = {item["destination_hash"] for item in payloads}
         with self.session() as session:
@@ -284,7 +350,11 @@ class Database:
                     session.delete(row)
 
             for payload in payloads:
-                row = session.scalar(select(RouteRecord).where(RouteRecord.destination_hash == payload["destination_hash"]))
+                row = session.scalar(
+                    select(RouteRecord).where(
+                        RouteRecord.destination_hash == payload["destination_hash"]
+                    )
+                )
                 if row is None:
                     row = RouteRecord(destination_hash=payload["destination_hash"])
                     session.add(row)
@@ -295,7 +365,6 @@ class Database:
                 updated_at = self._parse_datetime(payload.get("last_updated_at"))
                 row.expires_at = expires_at
                 row.updated_at = updated_at or utcnow()
-
 
     def list_routes(self, limit: int | None = 100) -> list[dict[str, Any]]:
         with self.session() as session:
@@ -310,14 +379,20 @@ class Database:
                 "via_interface": row.via_interface,
                 "hop_count": row.hop_count,
                 "expires_at": row.expires_at.isoformat() if row.expires_at else None,
-                "last_updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                "last_updated_at": row.updated_at.isoformat()
+                if row.updated_at
+                else None,
             }
             for row in rows
         ]
 
     def get_route(self, destination_hash: str) -> dict[str, Any] | None:
         with self.session() as session:
-            row = session.scalar(select(RouteRecord).where(RouteRecord.destination_hash == destination_hash))
+            row = session.scalar(
+                select(RouteRecord).where(
+                    RouteRecord.destination_hash == destination_hash
+                )
+            )
         if row is None:
             return None
         return {
@@ -328,6 +403,7 @@ class Database:
             "expires_at": row.expires_at.isoformat() if row.expires_at else None,
             "last_updated_at": row.updated_at.isoformat() if row.updated_at else None,
         }
+
     def save_announce(self, payload: dict[str, Any]) -> None:
         received_at = self._parse_datetime(payload.get("received_at"))
         with self.session() as session:
@@ -347,14 +423,19 @@ class Database:
                     received_at=received_at or utcnow(),
                     hop_count=payload.get("hop_count"),
                     raw_summary=payload.get("raw_summary"),
-                    metadata_json=json.dumps(payload.get("metadata") or {}, ensure_ascii=False),
+                    metadata_json=json.dumps(
+                        payload.get("metadata") or {}, ensure_ascii=False
+                    ),
                 )
             )
 
-
     def list_announces(self, limit: int = 100) -> list[dict[str, Any]]:
         with self.session() as session:
-            rows = session.scalars(select(AnnounceRecord).order_by(AnnounceRecord.received_at.desc()).limit(limit)).all()
+            rows = session.scalars(
+                select(AnnounceRecord)
+                .order_by(AnnounceRecord.received_at.desc())
+                .limit(limit)
+            ).all()
         return [
             {
                 "id": row.id,
@@ -370,7 +451,9 @@ class Database:
 
     def get_announce(self, announce_id: int) -> dict[str, Any] | None:
         with self.session() as session:
-            row = session.scalar(select(AnnounceRecord).where(AnnounceRecord.id == announce_id))
+            row = session.scalar(
+                select(AnnounceRecord).where(AnnounceRecord.id == announce_id)
+            )
         if row is None:
             return None
         return {
@@ -385,7 +468,11 @@ class Database:
 
     def get_maintenance_state(self) -> dict[str, Any]:
         with self.session() as session:
-            row = session.scalar(select(MaintenanceStateRecord).order_by(MaintenanceStateRecord.id.desc()))
+            row = session.scalar(
+                select(MaintenanceStateRecord).order_by(
+                    MaintenanceStateRecord.id.desc()
+                )
+            )
         if row is None:
             return {
                 "enabled": False,
@@ -408,7 +495,11 @@ class Database:
         until_at: datetime | None = None,
     ) -> dict[str, Any]:
         with self.session() as session:
-            row = session.scalar(select(MaintenanceStateRecord).order_by(MaintenanceStateRecord.id.desc()))
+            row = session.scalar(
+                select(MaintenanceStateRecord).order_by(
+                    MaintenanceStateRecord.id.desc()
+                )
+            )
             if row is None:
                 row = MaintenanceStateRecord()
                 session.add(row)
@@ -426,7 +517,9 @@ class Database:
 
     def list_users(self) -> list[dict[str, Any]]:
         with self.session() as session:
-            rows = session.scalars(select(UserRecord).order_by(UserRecord.username.asc())).all()
+            rows = session.scalars(
+                select(UserRecord).order_by(UserRecord.username.asc())
+            ).all()
         return [
             {
                 "username": row.username,
@@ -435,14 +528,18 @@ class Database:
                 "enabled": row.enabled,
                 "created_at": row.created_at.isoformat() if row.created_at else None,
                 "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-                "last_login_at": row.last_login_at.isoformat() if row.last_login_at else None,
+                "last_login_at": row.last_login_at.isoformat()
+                if row.last_login_at
+                else None,
             }
             for row in rows
         ]
 
     def get_user(self, username: str) -> dict[str, Any] | None:
         with self.session() as session:
-            row = session.scalar(select(UserRecord).where(UserRecord.username == username))
+            row = session.scalar(
+                select(UserRecord).where(UserRecord.username == username)
+            )
         if row is None:
             return None
         return {
@@ -452,7 +549,9 @@ class Database:
             "enabled": row.enabled,
             "created_at": row.created_at.isoformat() if row.created_at else None,
             "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-            "last_login_at": row.last_login_at.isoformat() if row.last_login_at else None,
+            "last_login_at": row.last_login_at.isoformat()
+            if row.last_login_at
+            else None,
         }
 
     def upsert_user(
@@ -464,7 +563,9 @@ class Database:
         enabled: bool = True,
     ) -> dict[str, Any]:
         with self.session() as session:
-            row = session.scalar(select(UserRecord).where(UserRecord.username == username))
+            row = session.scalar(
+                select(UserRecord).where(UserRecord.username == username)
+            )
             if row is None:
                 row = UserRecord(username=username)
                 session.add(row)
@@ -481,12 +582,16 @@ class Database:
                 "enabled": row.enabled,
                 "created_at": row.created_at.isoformat() if row.created_at else None,
                 "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-                "last_login_at": row.last_login_at.isoformat() if row.last_login_at else None,
+                "last_login_at": row.last_login_at.isoformat()
+                if row.last_login_at
+                else None,
             }
 
     def set_user_enabled(self, username: str, enabled: bool) -> dict[str, Any] | None:
         with self.session() as session:
-            row = session.scalar(select(UserRecord).where(UserRecord.username == username))
+            row = session.scalar(
+                select(UserRecord).where(UserRecord.username == username)
+            )
             if row is None:
                 return None
             row.enabled = enabled
@@ -499,12 +604,16 @@ class Database:
                 "enabled": row.enabled,
                 "created_at": row.created_at.isoformat() if row.created_at else None,
                 "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-                "last_login_at": row.last_login_at.isoformat() if row.last_login_at else None,
+                "last_login_at": row.last_login_at.isoformat()
+                if row.last_login_at
+                else None,
             }
 
     def touch_user_login(self, username: str) -> None:
         with self.session() as session:
-            row = session.scalar(select(UserRecord).where(UserRecord.username == username))
+            row = session.scalar(
+                select(UserRecord).where(UserRecord.username == username)
+            )
             if row is None:
                 return
             row.last_login_at = utcnow()
@@ -512,7 +621,9 @@ class Database:
 
     def list_api_tokens(self) -> list[dict[str, Any]]:
         with self.session() as session:
-            rows = session.scalars(select(ApiTokenRecord).order_by(ApiTokenRecord.created_at.desc())).all()
+            rows = session.scalars(
+                select(ApiTokenRecord).order_by(ApiTokenRecord.created_at.desc())
+            ).all()
         return [
             {
                 "token_name": row.token_name,
@@ -522,7 +633,9 @@ class Database:
                 "scopes": json.loads(row.scopes_json or "[]"),
                 "enabled": row.enabled,
                 "created_at": row.created_at.isoformat() if row.created_at else None,
-                "last_used_at": row.last_used_at.isoformat() if row.last_used_at else None,
+                "last_used_at": row.last_used_at.isoformat()
+                if row.last_used_at
+                else None,
                 "expires_at": row.expires_at.isoformat() if row.expires_at else None,
             }
             for row in rows
@@ -530,7 +643,9 @@ class Database:
 
     def get_api_token_by_hash(self, token_hash: str) -> dict[str, Any] | None:
         with self.session() as session:
-            row = session.scalar(select(ApiTokenRecord).where(ApiTokenRecord.token_hash == token_hash))
+            row = session.scalar(
+                select(ApiTokenRecord).where(ApiTokenRecord.token_hash == token_hash)
+            )
         if row is None:
             return None
         return {
@@ -578,13 +693,19 @@ class Database:
                 "scopes": scopes,
                 "enabled": row.enabled,
                 "created_at": row.created_at.isoformat() if row.created_at else None,
-                "last_used_at": row.last_used_at.isoformat() if row.last_used_at else None,
+                "last_used_at": row.last_used_at.isoformat()
+                if row.last_used_at
+                else None,
                 "expires_at": row.expires_at.isoformat() if row.expires_at else None,
             }
 
-    def set_api_token_enabled(self, token_name: str, enabled: bool) -> dict[str, Any] | None:
+    def set_api_token_enabled(
+        self, token_name: str, enabled: bool
+    ) -> dict[str, Any] | None:
         with self.session() as session:
-            row = session.scalar(select(ApiTokenRecord).where(ApiTokenRecord.token_name == token_name))
+            row = session.scalar(
+                select(ApiTokenRecord).where(ApiTokenRecord.token_name == token_name)
+            )
             if row is None:
                 return None
             row.enabled = enabled
@@ -597,13 +718,17 @@ class Database:
                 "scopes": json.loads(row.scopes_json or "[]"),
                 "enabled": row.enabled,
                 "created_at": row.created_at.isoformat() if row.created_at else None,
-                "last_used_at": row.last_used_at.isoformat() if row.last_used_at else None,
+                "last_used_at": row.last_used_at.isoformat()
+                if row.last_used_at
+                else None,
                 "expires_at": row.expires_at.isoformat() if row.expires_at else None,
             }
 
     def touch_api_token(self, token_name: str) -> None:
         with self.session() as session:
-            row = session.scalar(select(ApiTokenRecord).where(ApiTokenRecord.token_name == token_name))
+            row = session.scalar(
+                select(ApiTokenRecord).where(ApiTokenRecord.token_name == token_name)
+            )
             if row is None:
                 return
             row.last_used_at = utcnow()

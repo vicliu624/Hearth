@@ -96,7 +96,9 @@ def test_tcp_driver_allows_server_mode_without_host() -> None:
     assert driver.validate_configuration() == []
 
 
-def test_managed_adapter_reads_reticulum_runtime_observations(tmp_path: Path, monkeypatch) -> None:
+def test_managed_adapter_reads_reticulum_runtime_observations(
+    tmp_path: Path, monkeypatch
+) -> None:
     config_path = _write_config(tmp_path / "hearth.toml")
     config_path.write_text(
         config_path.read_text(encoding="utf-8").replace(
@@ -127,6 +129,7 @@ def test_managed_adapter_reads_reticulum_runtime_observations(tmp_path: Path, mo
     )
 
     monkeypatch.setattr(adapter, "_is_pid_running", lambda pid: True)
+    monkeypatch.setattr(adapter, "_transport_identity_ready", lambda: True)
 
     status_payload = {
         "interfaces": [
@@ -175,10 +178,12 @@ def test_managed_adapter_reads_reticulum_runtime_observations(tmp_path: Path, mo
 
     def fake_run(command, **kwargs):
         joined = " ".join(command)
-        if "RNS.Utilities.rnstatus" in joined:
-            return SimpleNamespace(returncode=0, stdout=json.dumps(status_payload), stderr="")
-        if "RNS.Utilities.rnpath" in joined:
-            return SimpleNamespace(returncode=0, stdout=json.dumps(path_payload), stderr="")
+        if "hearth.reticulum.observer" in joined:
+            return SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps({"status": status_payload, "paths": path_payload}),
+                stderr="",
+            )
         raise AssertionError(f"unexpected command: {command}")
 
     import hearth.reticulum.runtime as runtime_module
@@ -196,8 +201,7 @@ def test_managed_adapter_reads_reticulum_runtime_observations(tmp_path: Path, mo
     assert {item.name for item in interfaces} == {"WiFi LAN", "Public TCP"}
     assert paths[0].destination_hash == "deadbeefdeadbeef"
     assert paths[0].via_interface == "Bootstrap Beleth"
-    assert announces[0].source_hash == "deadbeefdeadbeef"
-    assert announces[0].metadata["source_type"] == "path"
+    assert announces == []  # A path snapshot is not a received announcement.
 
 
 def test_custom_roles_and_plugin_lifecycle(tmp_path: Path) -> None:
@@ -214,14 +218,21 @@ def test_custom_roles_and_plugin_lifecycle(tmp_path: Path) -> None:
                 permissions=["read", "operate"],
             )
             assert created_role["name"] == "ops_auditor"
-            assert any(item["name"] == "ops_auditor" for item in context.security_service.list_roles())
+            assert any(
+                item["name"] == "ops_auditor"
+                for item in context.security_service.list_roles()
+            )
 
-            installed = context.plugin_service.install_plugin("matrix_bridge", enable=True)
+            installed = context.plugin_service.install_plugin(
+                "matrix_bridge", enable=True
+            )
             installed_names = [item["name"] for item in installed["plugins"]]
             assert "matrix_bridge" in installed_names
             assert "metrics_exporter" in installed_names
 
-            updated = context.plugin_service.update_plugin("matrix_bridge", enable=False)
+            updated = context.plugin_service.update_plugin(
+                "matrix_bridge", enable=False
+            )
             assert updated["enabled"] is False
 
             removed = context.plugin_service.uninstall_plugin("matrix_bridge")
@@ -257,7 +268,9 @@ def test_backup_snapshots_and_remote_log_ingest(tmp_path: Path) -> None:
             )
             assert ingest["ingested"] == 1
 
-            entries = await context.remote_log_service.list_entries(node_name="remote-east", limit=20)
+            entries = await context.remote_log_service.list_entries(
+                node_name="remote-east", limit=20
+            )
             assert any(item["node_name"] == "remote-east" for item in entries)
 
             dr = context.backup_service.disaster_recovery_helper()
@@ -267,4 +280,3 @@ def test_backup_snapshots_and_remote_log_ingest(tmp_path: Path) -> None:
             await context.shutdown(stop_runtime=False)
 
     asyncio.run(scenario())
-

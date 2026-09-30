@@ -5,7 +5,7 @@
   <div>
     <p class="page-kicker">{{ t("nav.bridges") }}</p>
     <h1>{{ t("page.bridges") }}</h1>
-    <p class="page-subtitle">{{ page_total }} {{ t("bridges.total") }}</p>
+    <p class="page-subtitle">{{ t("count.bridges", count=page_total) }}</p>
   </div>
   <div class="hero-meta-pill">{{ tv(summary.runtime_status) }}</div>
 </section>

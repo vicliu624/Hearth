@@ -13,8 +13,8 @@
 <section class="metric-grid metric-grid--4">
   <article class="metric-card">
     <p class="metric-card__eyebrow">{{ t("topology.score") }}</p>
-    <h2>{{ insights.score }}</h2>
-    <p class="metric-card__subtext">/ 100</p>
+    <h2>{{ insights.score if insights.score is not none else t("value.not_scored") }}</h2>
+    {% if insights.score is not none %}<p class="metric-card__subtext">/ 100</p>{% endif %}
   </article>
   <article class="metric-card">
     <p class="metric-card__eyebrow">{{ t("field.peers") }}</p>

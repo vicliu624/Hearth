@@ -13,7 +13,12 @@ from hearth.storage.db import Database
 
 
 class AlertService:
-    ALERT_EVENT_TYPES = {"alert.activated", "alert.resolved", "alert.hook_delivered", "alert.hook_failed"}
+    ALERT_EVENT_TYPES = {
+        "alert.activated",
+        "alert.resolved",
+        "alert.hook_delivered",
+        "alert.hook_failed",
+    }
 
     def __init__(self, settings: HearthSettings, database: Database) -> None:
         self.settings = settings
@@ -33,13 +38,17 @@ class AlertService:
             "message": alert.get("message"),
             "rule_source": alert.get("rule_source"),
         }
-        return hashlib.sha1(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+        return hashlib.sha1(
+            json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        ).hexdigest()[:16]
 
     def _normalize_alert(self, alert: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(alert)
         normalized["fingerprint"] = self._fingerprint(normalized)
         normalized["created_at"] = str(normalized.get("created_at") or self._now_iso())
-        normalized["rule_source"] = str(normalized.get("rule_source") or normalized.get("category") or "alert_rule")
+        normalized["rule_source"] = str(
+            normalized.get("rule_source") or normalized.get("category") or "alert_rule"
+        )
         return normalized
 
     def _parse_timestamp(self, value: str | None) -> datetime | None:
@@ -55,14 +64,20 @@ class AlertService:
 
     def _alert_history_events(self, limit: int | None = 500) -> list[dict[str, Any]]:
         rows = self.database.list_events(limit=limit)
-        return [item for item in rows if str(item.get("event_type") or "") in self.ALERT_EVENT_TYPES]
+        return [
+            item
+            for item in rows
+            if str(item.get("event_type") or "") in self.ALERT_EVENT_TYPES
+        ]
 
     def _latest_activation_payloads(self) -> dict[str, dict[str, Any]]:
         payloads: dict[str, dict[str, Any]] = {}
         for item in self._alert_history_events(limit=1000):
             if str(item.get("event_type") or "") != "alert.activated":
                 continue
-            payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+            payload = (
+                item.get("payload") if isinstance(item.get("payload"), dict) else {}
+            )
             fingerprint = str(payload.get("fingerprint") or "")
             if fingerprint and fingerprint not in payloads:
                 payloads[fingerprint] = payload
@@ -74,7 +89,9 @@ class AlertService:
             event_type = str(item.get("event_type") or "")
             if event_type not in {"alert.activated", "alert.resolved"}:
                 continue
-            payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+            payload = (
+                item.get("payload") if isinstance(item.get("payload"), dict) else {}
+            )
             fingerprint = str(payload.get("fingerprint") or "")
             if not fingerprint or fingerprint in state:
                 continue
@@ -85,7 +102,8 @@ class AlertService:
         alerts: list[dict[str, Any]] = []
         runtime_status = str(summary.get("runtime_status") or "unknown")
         health_status = str(summary.get("health_status") or "unknown")
-        if runtime_status != "running":
+        intentionally_stopped = summary.get("desired_state") == "stopped"
+        if runtime_status != "running" and not intentionally_stopped:
             alerts.append(
                 {
                     "severity": "critical",
@@ -100,7 +118,9 @@ class AlertService:
         elif health_status in {"warning", "degraded", "critical"}:
             alerts.append(
                 {
-                    "severity": "critical" if health_status == "critical" else "warning",
+                    "severity": "critical"
+                    if health_status == "critical"
+                    else "warning",
                     "source": "health",
                     "category": "health",
                     "rule_source": "node_health",
@@ -122,7 +142,7 @@ class AlertService:
                 }
             )
         for interface in summary.get("interfaces", []):
-            if not interface.get("enabled"):
+            if intentionally_stopped or not interface.get("enabled"):
                 continue
             if interface.get("status") in {"stopped", "error", "crashed"}:
                 alerts.append(
@@ -131,12 +151,17 @@ class AlertService:
                         "source": "interface",
                         "category": "interface",
                         "rule_source": "interface_runtime",
+                        "interface_name": interface["name"],
+                        "interface_status": interface.get("status"),
+                        "interface_health": interface.get("health_status"),
                         "title": f"Interface {interface['name']} is not running",
                         "message": f"Status is {interface.get('status')} with health {interface.get('health_status')}.",
                         "created_at": interface.get("last_seen_at") or self._now_iso(),
                     }
                 )
-        maintenance = summary.get("maintenance") or self.database.get_maintenance_state()
+        maintenance = (
+            summary.get("maintenance") or self.database.get_maintenance_state()
+        )
         if maintenance.get("enabled"):
             alerts.append(
                 {
@@ -145,7 +170,10 @@ class AlertService:
                     "category": "maintenance",
                     "rule_source": "maintenance_mode",
                     "title": "Maintenance mode is enabled",
-                    "message": str(maintenance.get("reason") or "Automatic recovery is currently paused."),
+                    "message": str(
+                        maintenance.get("reason")
+                        or "Automatic recovery is currently paused."
+                    ),
                     "created_at": maintenance.get("updated_at") or self._now_iso(),
                 }
             )
@@ -188,6 +216,8 @@ class AlertService:
             )
         recent_events = self.database.list_events(limit=80)
         for entry in recent_events:
+            if str(entry.get("event_type") or "").startswith("alert."):
+                continue
             severity = str(entry.get("severity") or "").lower()
             if severity not in {"warning", "error", "critical"}:
                 continue
@@ -218,15 +248,31 @@ class AlertService:
     def summarize(self, alerts: list[dict[str, Any]]) -> dict[str, int]:
         return {
             "total": len(alerts),
-            "critical": sum(1 for alert in alerts if alert.get("severity") == "critical"),
+            "critical": sum(
+                1 for alert in alerts if alert.get("severity") == "critical"
+            ),
             "warning": sum(1 for alert in alerts if alert.get("severity") == "warning"),
             "healthy": 0 if alerts else 1,
+        }
+
+    def snapshot(self, summary: dict[str, Any]) -> dict[str, Any]:
+        alerts = self.build_alerts(summary)
+        return {
+            "summary": self.summarize(alerts),
+            "alerts": alerts,
+            "history": self.history(limit=50),
+            "hooks": self.hook_status(),
+            "rule_sources": sorted(
+                {str(item.get("rule_source") or "") for item in alerts}
+            ),
         }
 
     def history(self, limit: int = 50) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
         for item in self._alert_history_events(limit=limit * 4):
-            payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+            payload = (
+                item.get("payload") if isinstance(item.get("payload"), dict) else {}
+            )
             event_type = str(item.get("event_type") or "")
             row = {
                 "id": item.get("id"),
@@ -254,7 +300,9 @@ class AlertService:
             event_type = str(item.get("event_type") or "")
             if event_type not in {"alert.hook_delivered", "alert.hook_failed"}:
                 continue
-            payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+            payload = (
+                item.get("payload") if isinstance(item.get("payload"), dict) else {}
+            )
             latest_delivery = {
                 "event_type": event_type,
                 "severity": item.get("severity"),
@@ -267,7 +315,10 @@ class AlertService:
             }
             break
         return {
-            "enabled": bool(self.settings.alerts.webhook_enabled and self.settings.alerts.webhook_url),
+            "enabled": bool(
+                self.settings.alerts.webhook_enabled
+                and self.settings.alerts.webhook_url
+            ),
             "webhook_url": self.settings.alerts.webhook_url,
             "include_resolved": self.settings.alerts.include_resolved,
             "delivery_timeout_sec": self.settings.alerts.delivery_timeout_sec,
@@ -275,18 +326,29 @@ class AlertService:
         }
 
     def _webhook_is_enabled(self) -> bool:
-        return bool(self.settings.alerts.webhook_enabled and str(self.settings.alerts.webhook_url or "").strip())
+        return bool(
+            self.settings.alerts.webhook_enabled
+            and str(self.settings.alerts.webhook_url or "").strip()
+        )
 
     def _deliver_webhook_sync(self, payload: dict[str, Any]) -> dict[str, Any]:
         request = urllib_request.Request(
             str(self.settings.alerts.webhook_url),
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            headers={"Content-Type": "application/json; charset=utf-8", "User-Agent": "Hearth/alerts"},
+            headers={
+                "Content-Type": "application/json; charset=utf-8",
+                "User-Agent": "Hearth/alerts",
+            },
             method="POST",
         )
-        with urllib_request.urlopen(request, timeout=max(int(self.settings.alerts.delivery_timeout_sec), 1)) as response:
+        with urllib_request.urlopen(
+            request, timeout=max(int(self.settings.alerts.delivery_timeout_sec), 1)
+        ) as response:
             body = response.read(4096).decode("utf-8", errors="ignore")
-            return {"status_code": getattr(response, "status", response.getcode()), "body": body}
+            return {
+                "status_code": getattr(response, "status", response.getcode()),
+                "body": body,
+            }
 
     async def _deliver_transition(self, transition: str, alert: dict[str, Any]) -> None:
         if not self._webhook_is_enabled():
@@ -313,7 +375,12 @@ class AlertService:
                     "status_code": response.get("status_code"),
                 },
             )
-        except (OSError, urllib_error.URLError, urllib_error.HTTPError, ValueError) as exc:
+        except (
+            OSError,
+            urllib_error.URLError,
+            urllib_error.HTTPError,
+            ValueError,
+        ) as exc:
             self.database.record_event(
                 "alert.hook_failed",
                 f"alert webhook failed for {alert.get('fingerprint')}",
@@ -350,7 +417,10 @@ class AlertService:
         for fingerprint, is_active in active_map.items():
             if not is_active or fingerprint in current_fingerprints:
                 continue
-            previous = activation_payloads.get(fingerprint) or {"fingerprint": fingerprint, "title": "resolved alert"}
+            previous = activation_payloads.get(fingerprint) or {
+                "fingerprint": fingerprint,
+                "title": "resolved alert",
+            }
             resolved_payload = {
                 **previous,
                 "transition": "resolved",
@@ -369,5 +439,11 @@ class AlertService:
             "alerts": alerts,
             "history": self.history(limit=50),
             "hooks": self.hook_status(),
-            "rule_sources": sorted({str(alert.get("rule_source") or "") for alert in alerts if alert.get("rule_source")}),
+            "rule_sources": sorted(
+                {
+                    str(alert.get("rule_source") or "")
+                    for alert in alerts
+                    if alert.get("rule_source")
+                }
+            ),
         }

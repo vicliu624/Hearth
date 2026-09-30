@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import json
@@ -7,6 +7,7 @@ from typing import Awaitable, Callable
 
 import typer
 import uvicorn
+from hearth import __version__
 
 from hearth.api.main import create_app
 from hearth.core.config import load_settings
@@ -81,7 +82,9 @@ async def run_with_context(
     stop_runtime: bool,
 ) -> object:
     context = build_context(config)
-    await context.startup(auto_start_runtime=auto_start_runtime, enable_background_jobs=False)
+    await context.startup(
+        auto_start_runtime=auto_start_runtime, enable_background_jobs=False
+    )
     try:
         return await action(context)
     finally:
@@ -109,7 +112,9 @@ async def collect_system_info(context: ApplicationContext) -> dict:
             "data_dir": str(context.settings.data_dir),
             "database_path": str(context.settings.database_path),
             "runtime_dir": str(context.settings.runtime_dir),
-            "config_path": str(context.settings.config_path) if context.settings.config_path else None,
+            "config_path": str(context.settings.config_path)
+            if context.settings.config_path
+            else None,
             "reticulum_config_path": str(context.settings.reticulum_config_path),
             "identity_path": str(context.settings.identity_path),
         },
@@ -140,13 +145,22 @@ async def collect_security_overview(context: ApplicationContext) -> dict:
 
 
 @app.command()
-def serve(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
-    settings = load_settings(config)
-    uvicorn.run(create_app(settings_path=config), host=settings.web.host, port=settings.web.port)
+def serve(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
+    application = create_app(settings_path=config)
+    settings = application.state.context.settings
+    uvicorn.run(application, host=settings.web.host, port=settings.web.port)
 
 
 @app.command()
-def status(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def status(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -159,7 +173,11 @@ def status(config: Path | None = typer.Option(default=None, exists=False, dir_ok
 
 
 @app.command()
-def start(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def start(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -172,7 +190,11 @@ def start(config: Path | None = typer.Option(default=None, exists=False, dir_oka
 
 
 @app.command()
-def stop(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def stop(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -185,7 +207,11 @@ def stop(config: Path | None = typer.Option(default=None, exists=False, dir_okay
 
 
 @app.command()
-def restart(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def restart(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -198,7 +224,11 @@ def restart(config: Path | None = typer.Option(default=None, exists=False, dir_o
 
 
 @interfaces_app.command("list")
-def list_interfaces(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def list_interfaces(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -211,7 +241,12 @@ def list_interfaces(config: Path | None = typer.Option(default=None, exists=Fals
 
 
 @interfaces_app.command("show")
-def show_interface(name: str, config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def show_interface(
+    name: str,
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -224,7 +259,12 @@ def show_interface(name: str, config: Path | None = typer.Option(default=None, e
 
 
 @interfaces_app.command("start")
-def start_interface(name: str, config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def start_interface(
+    name: str,
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -237,7 +277,12 @@ def start_interface(name: str, config: Path | None = typer.Option(default=None, 
 
 
 @interfaces_app.command("stop")
-def stop_interface(name: str, config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def stop_interface(
+    name: str,
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -250,7 +295,12 @@ def stop_interface(name: str, config: Path | None = typer.Option(default=None, e
 
 
 @interfaces_app.command("restart")
-def restart_interface(name: str, config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def restart_interface(
+    name: str,
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -265,7 +315,9 @@ def restart_interface(name: str, config: Path | None = typer.Option(default=None
 @peers_app.command("list")
 def list_peers(
     limit: int = typer.Option(default=100, min=1, max=500),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     payload = asyncio.run(
         run_with_context(
@@ -281,7 +333,9 @@ def list_peers(
 @routes_app.command("list")
 def list_routes(
     limit: int = typer.Option(default=100, min=1, max=500),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     payload = asyncio.run(
         run_with_context(
@@ -297,7 +351,9 @@ def list_routes(
 @announces_app.command("recent")
 def recent_announces(
     limit: int = typer.Option(default=20, min=1, max=500),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     payload = asyncio.run(
         run_with_context(
@@ -313,7 +369,9 @@ def recent_announces(
 @logs_app.command("tail")
 def tail_logs(
     limit: int = typer.Option(default=50, min=1, max=500),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     payload = asyncio.run(
         run_with_context(
@@ -327,12 +385,34 @@ def tail_logs(
 
 
 @config_app.command("show")
-def show_config(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def show_config(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     print_json(load_settings(config).to_display_dict())
 
 
+@config_app.command("apply")
+def apply_config(config: Path = typer.Option(..., exists=True, dir_okay=False)) -> None:
+    print_json(
+        asyncio.run(
+            run_with_context(
+                config,
+                lambda context: context.apply_configuration(),
+                auto_start_runtime=False,
+                stop_runtime=False,
+            )
+        )
+    )
+
+
 @config_app.command("show-raw")
-def show_config_raw(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def show_config_raw(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -347,7 +427,9 @@ def show_config_raw(config: Path | None = typer.Option(default=None, exists=Fals
 @config_app.command("validate")
 def validate_config_file(
     file: Path = typer.Argument(..., exists=True, dir_okay=False, file_okay=True),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     raw = file.read_text(encoding="utf-8")
     payload = asyncio.run(
@@ -364,7 +446,9 @@ def validate_config_file(
 @config_app.command("save-raw")
 def save_config_raw(
     file: Path = typer.Argument(..., exists=True, dir_okay=False, file_okay=True),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     raw = file.read_text(encoding="utf-8")
     payload = asyncio.run(
@@ -379,7 +463,11 @@ def save_config_raw(
 
 
 @backup_app.command("list")
-def list_backups(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def list_backups(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -394,12 +482,16 @@ def list_backups(config: Path | None = typer.Option(default=None, exists=False, 
 @backup_app.command("export")
 def export_backup(
     destination: Path | None = typer.Argument(default=None),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
-            lambda context: asyncio.to_thread(context.backup_service.export, destination),
+            lambda context: asyncio.to_thread(
+                context.backup_service.export, destination
+            ),
             auto_start_runtime=False,
             stop_runtime=False,
         )
@@ -410,12 +502,14 @@ def export_backup(
 @backup_app.command("import")
 def import_backup(
     archive: Path = typer.Argument(..., exists=True, dir_okay=False, file_okay=True),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
-            lambda context: asyncio.to_thread(context.backup_service.import_archive, archive),
+            lambda context: context.restore_backup(archive),
             auto_start_runtime=False,
             stop_runtime=False,
         )
@@ -424,7 +518,11 @@ def import_backup(
 
 
 @fleet_app.command("overview")
-def fleet_overview(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def fleet_overview(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -437,7 +535,11 @@ def fleet_overview(config: Path | None = typer.Option(default=None, exists=False
 
 
 @fleet_app.command("nodes")
-def fleet_nodes(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def fleet_nodes(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -450,7 +552,12 @@ def fleet_nodes(config: Path | None = typer.Option(default=None, exists=False, d
 
 
 @fleet_app.command("node")
-def fleet_node(node_name: str, config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def fleet_node(
+    node_name: str,
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -463,7 +570,11 @@ def fleet_node(node_name: str, config: Path | None = typer.Option(default=None, 
 
 
 @fleet_app.command("groups")
-def fleet_groups(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def fleet_groups(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -476,7 +587,11 @@ def fleet_groups(config: Path | None = typer.Option(default=None, exists=False, 
 
 
 @fleet_app.command("templates")
-def fleet_templates(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def fleet_templates(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -489,7 +604,11 @@ def fleet_templates(config: Path | None = typer.Option(default=None, exists=Fals
 
 
 @fleet_app.command("tags")
-def fleet_tags(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def fleet_tags(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -502,7 +621,11 @@ def fleet_tags(config: Path | None = typer.Option(default=None, exists=False, di
 
 
 @fleet_app.command("health")
-def fleet_health(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def fleet_health(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -517,7 +640,9 @@ def fleet_health(config: Path | None = typer.Option(default=None, exists=False, 
 @fleet_app.command("events")
 def fleet_events(
     limit: int = typer.Option(default=100, min=1, max=500),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     payload = asyncio.run(
         run_with_context(
@@ -535,12 +660,18 @@ def fleet_create_group(
     name: str,
     description: str | None = typer.Option(default=None),
     group_type: str = typer.Option(default="custom"),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     async def action(context: ApplicationContext) -> object:
-        return context.fleet_service.create_group(name=name, description=description, group_type=group_type)
+        return context.fleet_service.create_group(
+            name=name, description=description, group_type=group_type
+        )
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
@@ -557,7 +688,9 @@ def fleet_register_node(
     dashboard_url: str | None = typer.Option(default=None),
     region: str | None = typer.Option(default=None),
     notes: str | None = typer.Option(default=None),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     payload = asyncio.run(
         run_with_context(
@@ -585,16 +718,26 @@ def fleet_register_node(
 @fleet_app.command("create-template")
 def fleet_create_template(
     name: str,
-    template_file: Path | None = typer.Option(default=None, exists=True, dir_okay=False, file_okay=True),
+    template_file: Path | None = typer.Option(
+        default=None, exists=True, dir_okay=False, file_okay=True
+    ),
     template_text: str | None = typer.Option(default=None),
     description: str | None = typer.Option(default=None),
     target_group: str | None = typer.Option(default=None),
     target_nodes: str = typer.Option(default=""),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     if bool(template_file) == bool(template_text):
-        raise typer.BadParameter("provide exactly one of --template-file or --template-text")
-    resolved_template = template_file.read_text(encoding="utf-8") if template_file else str(template_text or "")
+        raise typer.BadParameter(
+            "provide exactly one of --template-file or --template-text"
+        )
+    resolved_template = (
+        template_file.read_text(encoding="utf-8")
+        if template_file
+        else str(template_text or "")
+    )
 
     async def action(context: ApplicationContext) -> object:
         return context.fleet_service.create_template(
@@ -605,12 +748,18 @@ def fleet_create_template(
             target_nodes=target_nodes,
         )
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
 @system_app.command("info")
-def system_info(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def system_info(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -623,7 +772,11 @@ def system_info(config: Path | None = typer.Option(default=None, exists=False, d
 
 
 @system_app.command("diagnostics")
-def system_diagnostics(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def system_diagnostics(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -636,37 +789,57 @@ def system_diagnostics(config: Path | None = typer.Option(default=None, exists=F
 
 
 @system_app.command("maintenance")
-def system_maintenance(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def system_maintenance(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     async def action(context: ApplicationContext) -> object:
         return context.maintenance_service.get_state()
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
 @system_app.command("enable-maintenance")
 def system_enable_maintenance(
     reason: str | None = typer.Option(default=None),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     async def action(context: ApplicationContext) -> object:
         return context.maintenance_service.enable(reason=reason, actor="cli.system")
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
 @system_app.command("disable-maintenance")
-def system_disable_maintenance(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def system_disable_maintenance(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     async def action(context: ApplicationContext) -> object:
         return context.maintenance_service.disable(actor="cli.system")
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
 @system_app.command("security")
-def system_security(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def system_security(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -679,7 +852,11 @@ def system_security(config: Path | None = typer.Option(default=None, exists=Fals
 
 
 @backup_app.command("snapshots")
-def backup_snapshots(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def backup_snapshots(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
@@ -694,12 +871,16 @@ def backup_snapshots(config: Path | None = typer.Option(default=None, exists=Fal
 @backup_app.command("snapshot")
 def backup_snapshot(
     destination: Path | None = typer.Argument(default=None),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
-            lambda context: asyncio.to_thread(context.backup_service.create_snapshot, destination),
+            lambda context: asyncio.to_thread(
+                context.backup_service.create_snapshot, destination
+            ),
             auto_start_runtime=False,
             stop_runtime=False,
         )
@@ -711,31 +892,50 @@ def backup_snapshot(
 def backup_prune(
     keep: int = typer.Option(default=10, min=1),
     max_age_days: int | None = typer.Option(default=None, min=1),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     async def action(context: ApplicationContext) -> object:
-        return context.backup_service.prune_snapshots(keep=keep, max_age_days=max_age_days)
+        return context.backup_service.prune_snapshots(
+            keep=keep, max_age_days=max_age_days
+        )
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
 @backup_app.command("dr")
 def backup_disaster_recovery(
     archive: Path | None = typer.Argument(default=None),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     async def action(context: ApplicationContext) -> object:
         return context.backup_service.disaster_recovery_helper(archive_path=archive)
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
 @plugins_app.command("list")
-def plugins_list(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def plugins_list(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
-        run_with_context(config, lambda context: asyncio.to_thread(context.plugin_service.list_plugins), auto_start_runtime=False, stop_runtime=False)
+        run_with_context(
+            config,
+            lambda context: asyncio.to_thread(context.plugin_service.list_plugins),
+            auto_start_runtime=False,
+            stop_runtime=False,
+        )
     )
     print_json(payload)
 
@@ -743,12 +943,18 @@ def plugins_list(config: Path | None = typer.Option(default=None, exists=False, 
 @plugins_app.command("catalog")
 def plugins_catalog(
     refresh_sources: bool = typer.Option(default=False),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     async def action(context: ApplicationContext) -> object:
-        return context.plugin_service.list_available_plugins(refresh_sources=refresh_sources)
+        return context.plugin_service.list_available_plugins(
+            refresh_sources=refresh_sources
+        )
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
@@ -756,12 +962,16 @@ def plugins_catalog(
 def plugins_install(
     name: str,
     enable: bool = typer.Option(default=True),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     async def action(context: ApplicationContext) -> object:
         return context.plugin_service.install_plugin(name, enable=enable)
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
@@ -769,30 +979,50 @@ def plugins_install(
 def plugins_uninstall(
     name: str,
     remove_dependents: bool = typer.Option(default=False),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     async def action(context: ApplicationContext) -> object:
-        return context.plugin_service.uninstall_plugin(name, remove_dependents=remove_dependents)
+        return context.plugin_service.uninstall_plugin(
+            name, remove_dependents=remove_dependents
+        )
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
 @plugins_app.command("enable")
-def plugins_enable(name: str, config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def plugins_enable(
+    name: str,
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     async def action(context: ApplicationContext) -> object:
         return context.plugin_service.set_plugin_enabled(name, True)
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
 @plugins_app.command("disable")
-def plugins_disable(name: str, config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def plugins_disable(
+    name: str,
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     async def action(context: ApplicationContext) -> object:
         return context.plugin_service.set_plugin_enabled(name, False)
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
@@ -800,39 +1030,66 @@ def plugins_disable(name: str, config: Path | None = typer.Option(default=None, 
 def plugins_update(
     name: str,
     enable: bool | None = typer.Option(default=None),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     async def action(context: ApplicationContext) -> object:
         return context.plugin_service.update_plugin(name, enable=enable)
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
 @plugins_app.command("history")
 def plugins_history(
     limit: int = typer.Option(default=50, min=1, max=200),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     async def action(context: ApplicationContext) -> object:
         return context.plugin_service.plugin_history(limit=limit)
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
 @services_app.command("list")
-def services_list(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def services_list(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
-        run_with_context(config, lambda context: context.service_host_service.list_services(), auto_start_runtime=False, stop_runtime=False)
+        run_with_context(
+            config,
+            lambda context: context.service_host_service.list_services(),
+            auto_start_runtime=False,
+            stop_runtime=False,
+        )
     )
     print_json(payload)
 
 
 @services_app.command("show")
-def services_show(name: str, config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def services_show(
+    name: str,
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
-        run_with_context(config, lambda context: context.service_host_service.get_service(name), auto_start_runtime=False, stop_runtime=False)
+        run_with_context(
+            config,
+            lambda context: context.service_host_service.get_service(name),
+            auto_start_runtime=False,
+            stop_runtime=False,
+        )
     )
     print_json(payload)
 
@@ -841,7 +1098,9 @@ def services_show(name: str, config: Path | None = typer.Option(default=None, ex
 def services_control(
     name: str,
     action_name: str = typer.Argument(..., help="start|stop|restart"),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     payload = asyncio.run(
         run_with_context(
@@ -855,9 +1114,18 @@ def services_control(
 
 
 @security_app.command("roles")
-def security_roles(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def security_roles(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
-        run_with_context(config, lambda context: asyncio.to_thread(context.security_service.list_roles), auto_start_runtime=False, stop_runtime=False)
+        run_with_context(
+            config,
+            lambda context: asyncio.to_thread(context.security_service.list_roles),
+            auto_start_runtime=False,
+            stop_runtime=False,
+        )
     )
     print_json(payload)
 
@@ -868,14 +1136,20 @@ def security_create_role(
     permissions: str = typer.Option(..., help="Comma-separated permissions"),
     label: str | None = typer.Option(default=None),
     description: str | None = typer.Option(default=None),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     perms = [item.strip() for item in permissions.split(",") if item.strip()]
 
     async def action(context: ApplicationContext) -> object:
-        return context.security_service.create_role(name=name, label=label, description=description, permissions=perms)
+        return context.security_service.create_role(
+            name=name, label=label, description=description, permissions=perms
+        )
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
@@ -885,45 +1159,91 @@ def security_update_role(
     permissions: str | None = typer.Option(default=None),
     label: str | None = typer.Option(default=None),
     description: str | None = typer.Option(default=None),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
-    perms = [item.strip() for item in permissions.split(",") if item.strip()] if permissions else None
+    perms = (
+        [item.strip() for item in permissions.split(",") if item.strip()]
+        if permissions
+        else None
+    )
 
     async def action(context: ApplicationContext) -> object:
-        return context.security_service.update_role(name, label=label, description=description, permissions=perms)
+        return context.security_service.update_role(
+            name, label=label, description=description, permissions=perms
+        )
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
 @security_app.command("delete-role")
-def security_delete_role(name: str, config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def security_delete_role(
+    name: str,
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     async def action(context: ApplicationContext) -> object:
         return context.security_service.delete_role(name)
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
 @security_app.command("users")
-def security_users(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def security_users(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
-        run_with_context(config, lambda context: asyncio.to_thread(context.security_service.list_users), auto_start_runtime=False, stop_runtime=False)
+        run_with_context(
+            config,
+            lambda context: asyncio.to_thread(context.security_service.list_users),
+            auto_start_runtime=False,
+            stop_runtime=False,
+        )
     )
     print_json(payload)
 
 
 @security_app.command("tokens")
-def security_tokens(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def security_tokens(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     payload = asyncio.run(
-        run_with_context(config, lambda context: asyncio.to_thread(context.security_service.list_api_tokens), auto_start_runtime=False, stop_runtime=False)
+        run_with_context(
+            config,
+            lambda context: asyncio.to_thread(context.security_service.list_api_tokens),
+            auto_start_runtime=False,
+            stop_runtime=False,
+        )
     )
     print_json(payload)
 
 
 @rollout_app.command("list")
-def rollout_list(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
-    payload = asyncio.run(run_with_context(config, lambda context: context.rollout_service.list_rollouts(), auto_start_runtime=False, stop_runtime=False))
+def rollout_list(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
+    payload = asyncio.run(
+        run_with_context(
+            config,
+            lambda context: context.rollout_service.list_rollouts(),
+            auto_start_runtime=False,
+            stop_runtime=False,
+        )
+    )
     print_json(payload)
 
 
@@ -932,7 +1252,9 @@ def rollout_apply_template(
     template_name: str,
     target_group: str | None = typer.Option(default=None),
     target_nodes: str = typer.Option(default=""),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     nodes = [item.strip() for item in target_nodes.split(",") if item.strip()]
 
@@ -945,13 +1267,26 @@ def rollout_apply_template(
             actor="cli",
         )
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
 @upgrade_app.command("list")
-def upgrade_list(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
-    payload = asyncio.run(run_with_context(config, lambda context: context.upgrade_service.list_operations(), auto_start_runtime=False, stop_runtime=False))
+def upgrade_list(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
+    payload = asyncio.run(
+        run_with_context(
+            config,
+            lambda context: context.upgrade_service.list_operations(),
+            auto_start_runtime=False,
+            stop_runtime=False,
+        )
+    )
     print_json(payload)
 
 
@@ -964,7 +1299,9 @@ def upgrade_run(
     target_nodes: str = typer.Option(default=""),
     notes: str | None = typer.Option(default=None),
     enable_maintenance: bool = typer.Option(default=False),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     nodes = [item.strip() for item in target_nodes.split(",") if item.strip()]
 
@@ -980,7 +1317,9 @@ def upgrade_run(
             actor="cli",
         )
 
-    payload = asyncio.run(run_with_context(config, action, auto_start_runtime=False, stop_runtime=False))
+    payload = asyncio.run(
+        run_with_context(config, action, auto_start_runtime=False, stop_runtime=False)
+    )
     print_json(payload)
 
 
@@ -989,12 +1328,16 @@ def remote_logs_list(
     node_name: str | None = typer.Option(default=None),
     level: str | None = typer.Option(default=None),
     limit: int = typer.Option(default=100, min=1, max=500),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     payload = asyncio.run(
         run_with_context(
             config,
-            lambda context: context.remote_log_service.list_entries(node_name=node_name, level=level, limit=limit),
+            lambda context: context.remote_log_service.list_entries(
+                node_name=node_name, level=level, limit=limit
+            ),
             auto_start_runtime=False,
             stop_runtime=False,
         )
@@ -1005,10 +1348,17 @@ def remote_logs_list(
 @remote_logs_app.command("sync")
 def remote_logs_sync(
     limit: int = typer.Option(default=100, min=1, max=500),
-    config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True),
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
 ) -> None:
     payload = asyncio.run(
-        run_with_context(config, lambda context: context.remote_log_service.sync_nodes(limit=limit), auto_start_runtime=False, stop_runtime=False)
+        run_with_context(
+            config,
+            lambda context: context.remote_log_service.sync_nodes(limit=limit),
+            auto_start_runtime=False,
+            stop_runtime=False,
+        )
     )
     print_json(payload)
 
@@ -1073,7 +1423,7 @@ def deploy_compose(
 @deploy_app.command("debian-control")
 def deploy_debian_control(
     package_name: str = typer.Option(default="hearth"),
-    version: str = typer.Option(default="0.1.0"),
+    version: str = typer.Option(default=__version__),
     output: Path | None = typer.Option(default=None, dir_okay=False, file_okay=True),
 ) -> None:
     emit_text(render_debian_control(package_name=package_name, version=version), output)
@@ -1082,7 +1432,7 @@ def deploy_debian_control(
 @deploy_app.command("appliance-manifest")
 def deploy_appliance_manifest(
     image_name: str = typer.Option(default="hearth-appliance"),
-    version: str = typer.Option(default="0.1.0"),
+    version: str = typer.Option(default=__version__),
     output: Path | None = typer.Option(default=None, dir_okay=False, file_okay=True),
 ) -> None:
     emit_text(render_appliance_manifest(image_name=image_name, version=version), output)
@@ -1099,21 +1449,31 @@ def deploy_openwrt(
 @deploy_app.command("migration-plan")
 def deploy_migration_plan(
     from_version: str = typer.Option(default="0.1.0"),
-    to_version: str = typer.Option(default="0.1.0"),
+    to_version: str = typer.Option(default=__version__),
     output: Path | None = typer.Option(default=None, dir_okay=False, file_okay=True),
 ) -> None:
-    emit_text(render_migration_plan(from_version=from_version, to_version=to_version), output)
+    emit_text(
+        render_migration_plan(from_version=from_version, to_version=to_version), output
+    )
 
 
 @deploy_app.command("preflight")
-def deploy_preflight(config: Path | None = typer.Option(default=None, exists=False, dir_okay=False, file_okay=True)) -> None:
+def deploy_preflight(
+    config: Path | None = typer.Option(
+        default=None, exists=False, dir_okay=False, file_okay=True
+    ),
+) -> None:
     settings = load_settings(config)
     settings.ensure_directories()
     print_json(preflight_check(settings))
 
 
 @deploy_app.command("bundle")
-def deploy_bundle(directory: Path = typer.Argument(..., file_okay=False, dir_okay=True, writable=True)) -> None:
+def deploy_bundle(
+    directory: Path = typer.Argument(
+        ..., file_okay=False, dir_okay=True, writable=True
+    ),
+) -> None:
     written = write_bundle(directory)
     print_json({"written": written, "count": len(written)})
 

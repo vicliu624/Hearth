@@ -36,7 +36,7 @@
 
 {% if dr_helper %}
 <section class="panel">
-  <div class="panel-header"><div><h2>Disaster Recovery Checklist</h2></div></div>
+  <div class="panel-header"><div><h2>{{ t('backup.recovery_steps') }}</h2></div></div>
   <p class="muted">Selected archive: {{ dr_helper.selected_archive or detail.archive_path }}</p>
   <ol class="detail-list">
     {% for step in dr_helper.steps %}

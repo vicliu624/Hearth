@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 
 {% block content %}
 <section class="page-hero">
@@ -43,7 +43,7 @@
     <dl class="system-grid">
       <dt>{{ t("field.peer") }}</dt>
       <dd>{{ peer.display_name or '-' }}</dd>
-      <dt>Hash</dt>
+      <dt>{{ t('field.hash') }}</dt>
       <dd>{{ peer.peer_hash }}</dd>
       <dt>{{ t("field.first_seen") }}</dt>
       <dd>{{ tr(peer.first_seen_at) }}</dd>

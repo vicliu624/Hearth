@@ -30,7 +30,9 @@ class TopologyService:
         text = str(value or "-")
         return text if len(text) <= 12 else f"{text[:12]}..."
 
-    def _peer_label(self, peer_hash: str | None, peers_by_hash: dict[str, dict[str, Any]]) -> str:
+    def _peer_label(
+        self, peer_hash: str | None, peers_by_hash: dict[str, dict[str, Any]]
+    ) -> str:
         if not peer_hash:
             return "-"
         peer = peers_by_hash.get(peer_hash)
@@ -56,17 +58,25 @@ class TopologyService:
         raw_type = str(event_type or "route.changed")
         return raw_type.split(".")[-1] if "." in raw_type else raw_type
 
-    def _normalize_route_event(self, event: dict[str, Any], current_by_destination: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    def _normalize_route_event(
+        self, event: dict[str, Any], current_by_destination: dict[str, dict[str, Any]]
+    ) -> dict[str, Any]:
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
-        current_payload = payload.get("current") if isinstance(payload.get("current"), dict) else {}
-        previous_payload = payload.get("previous") if isinstance(payload.get("previous"), dict) else {}
+        current_payload = (
+            payload.get("current") if isinstance(payload.get("current"), dict) else {}
+        )
+        previous_payload = (
+            payload.get("previous") if isinstance(payload.get("previous"), dict) else {}
+        )
         destination_hash = str(
             payload.get("destination_hash")
             or current_payload.get("destination_hash")
             or previous_payload.get("destination_hash")
             or ""
         )
-        change_type = self._route_event_type(str(event.get("event_type") or ""), payload)
+        change_type = self._route_event_type(
+            str(event.get("event_type") or ""), payload
+        )
         current_route = current_by_destination.get(destination_hash)
         via_interface = (
             current_payload.get("via_interface")
@@ -106,15 +116,30 @@ class TopologyService:
             "current_route": current_route,
         }
 
-    async def _collect(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    async def _collect(
+        self,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
         peers = await self.peer_service.list_recent(limit=300)
         routes = await self.route_service.list_routes(limit=300)
-        interfaces = list(self.database.get_interface_runtimes().values())
+        current_names = {item.name for item in self.settings.interfaces}
+        current_names.update(
+            item.name
+            for item in self.peer_service.observation_service.adapter.get_interfaces()
+        )
+        interfaces = [
+            item
+            for name, item in self.database.get_interface_runtimes().items()
+            if name in current_names
+        ]
         return peers, routes, interfaces
 
     async def snapshot(self) -> dict[str, Any]:
         peers, routes, interfaces = await self._collect()
-        peers_by_hash = {str(peer.get("peer_hash") or ""): peer for peer in peers if peer.get("peer_hash")}
+        peers_by_hash = {
+            str(peer.get("peer_hash") or ""): peer
+            for peer in peers
+            if peer.get("peer_hash")
+        }
         local_node_id = f"local:{self.settings.system.node_name}"
 
         nodes: list[dict[str, Any]] = [
@@ -194,13 +219,19 @@ class TopologyService:
                 }
             )
 
-        hop_counts = [int(item.get("hop_count") or 0) for item in routes if item.get("hop_count") is not None]
+        hop_counts = [
+            int(item.get("hop_count") or 0)
+            for item in routes
+            if item.get("hop_count") is not None
+        ]
         hop_distribution_map: dict[int, int] = defaultdict(int)
         for hop in hop_counts:
             hop_distribution_map[max(hop, 0)] += 1
         hop_distribution = [
             {"hops": hop, "count": count}
-            for hop, count in sorted(hop_distribution_map.items(), key=lambda item: item[0])
+            for hop, count in sorted(
+                hop_distribution_map.items(), key=lambda item: item[0]
+            )
         ]
 
         segment_map: dict[str, dict[str, Any]] = {}
@@ -243,18 +274,37 @@ class TopologyService:
             )
             segment["route_count"] += 1
         for segment in segment_map.values():
-            segment_routes = [route for route in routes if str(route.get("via_interface") or "unknown") == segment["interface_name"]]
-            segment["next_hop_count"] = len({str(route.get("next_hop") or "") for route in segment_routes if route.get("next_hop")})
-            segment["connectivity"] = "connected" if segment["peer_count"] or segment["route_count"] else "isolated"
+            segment_routes = [
+                route
+                for route in routes
+                if str(route.get("via_interface") or "unknown")
+                == segment["interface_name"]
+            ]
+            segment["next_hop_count"] = len(
+                {
+                    str(route.get("next_hop") or "")
+                    for route in segment_routes
+                    if route.get("next_hop")
+                }
+            )
+            segment["connectivity"] = (
+                "connected"
+                if segment["peer_count"] or segment["route_count"]
+                else "isolated"
+            )
 
-        average_hops = round(sum(hop_counts) / len(hop_counts), 1) if hop_counts else 0.0
+        average_hops = (
+            round(sum(hop_counts) / len(hop_counts), 1) if hop_counts else 0.0
+        )
         overview = {
             "node_count": len(nodes),
             "edge_count": len(edges),
             "peer_count": len(peers),
             "route_count": len(routes),
             "interface_count": len(segment_map),
-            "active_interfaces": sum(1 for item in interfaces if item.get("status") == "running"),
+            "active_interfaces": sum(
+                1 for item in interfaces if item.get("status") == "running"
+            ),
             "average_hops": average_hops,
         }
         return {
@@ -263,7 +313,9 @@ class TopologyService:
             "overview": overview,
             "nodes": nodes,
             "edges": edges,
-            "segments": sorted(segment_map.values(), key=lambda item: str(item["interface_name"])),
+            "segments": sorted(
+                segment_map.values(), key=lambda item: str(item["interface_name"])
+            ),
             "hop_distribution": hop_distribution,
         }
 
@@ -277,9 +329,9 @@ class TopologyService:
                 str(peer.get("display_name") or peer.get("peer_hash") or "peer")
             )
         for route in routes:
-            destinations_by_interface[str(route.get("via_interface") or "unknown")].append(
-                self._short_id(str(route.get("destination_hash") or ""))
-            )
+            destinations_by_interface[
+                str(route.get("via_interface") or "unknown")
+            ].append(self._short_id(str(route.get("destination_hash") or "")))
 
         segments: list[dict[str, Any]] = []
         for segment in snapshot["segments"]:
@@ -314,18 +366,35 @@ class TopologyService:
 
     async def route_heatmap(self) -> dict[str, Any]:
         peers, routes, interfaces = await self._collect()
-        runtime_by_name = {str(item.get("name") or "unknown"): item for item in interfaces}
-        interface_names = sorted({*runtime_by_name.keys(), *[str(route.get("via_interface") or "unknown") for route in routes]})
+        runtime_by_name = {
+            str(item.get("name") or "unknown"): item for item in interfaces
+        }
+        interface_names = sorted(
+            {
+                *runtime_by_name.keys(),
+                *[str(route.get("via_interface") or "unknown") for route in routes],
+            }
+        )
         total_routes = max(len(routes), 1)
         rows: list[dict[str, Any]] = []
         for name in interface_names:
-            interface_routes = [route for route in routes if str(route.get("via_interface") or "unknown") == name]
-            hop_values = [int(route.get("hop_count") or 0) for route in interface_routes if route.get("hop_count") is not None]
+            interface_routes = [
+                route
+                for route in routes
+                if str(route.get("via_interface") or "unknown") == name
+            ]
+            hop_values = [
+                int(route.get("hop_count") or 0)
+                for route in interface_routes
+                if route.get("hop_count") is not None
+            ]
             route_count = len(interface_routes)
             runtime = runtime_by_name.get(name, {})
             metrics = dict(runtime.get("metrics") or {})
             route_share = round(route_count / total_routes * 100, 1) if routes else 0.0
-            traffic_total = int(metrics.get("rx_packets") or 0) + int(metrics.get("tx_packets") or 0)
+            traffic_total = int(metrics.get("rx_bytes") or 0) + int(
+                metrics.get("tx_bytes") or 0
+            )
             intensity = min(100, int(route_share) + min(traffic_total // 10, 60))
             rows.append(
                 {
@@ -334,16 +403,21 @@ class TopologyService:
                     "health_status": runtime.get("health_status") or "unknown",
                     "route_count": route_count,
                     "route_share": route_share,
-                    "avg_hops": round(sum(hop_values) / len(hop_values), 1) if hop_values else 0.0,
+                    "avg_hops": round(sum(hop_values) / len(hop_values), 1)
+                    if hop_values
+                    else 0.0,
                     "max_hops": max(hop_values) if hop_values else 0,
-                    "rx_packets": int(metrics.get("rx_packets") or 0),
-                    "tx_packets": int(metrics.get("tx_packets") or 0),
+                    "rx_bytes": int(metrics.get("rx_bytes") or 0),
+                    "tx_bytes": int(metrics.get("tx_bytes") or 0),
                     "error_count": int(metrics.get("error_count") or 0),
                     "traffic_total": traffic_total,
                     "intensity": intensity,
                 }
             )
-        rows.sort(key=lambda item: (int(item["route_count"]), int(item["traffic_total"])), reverse=True)
+        rows.sort(
+            key=lambda item: (int(item["route_count"]), int(item["traffic_total"])),
+            reverse=True,
+        )
         return {
             "generated_at": self._now_iso(),
             "total_routes": len(routes),
@@ -352,37 +426,63 @@ class TopologyService:
 
     async def critical_nodes(self, limit: int = 10) -> list[dict[str, Any]]:
         peers, routes, _ = await self._collect()
-        peers_by_hash = {str(peer.get("peer_hash") or ""): peer for peer in peers if peer.get("peer_hash")}
+        peers_by_hash = {
+            str(peer.get("peer_hash") or ""): peer
+            for peer in peers
+            if peer.get("peer_hash")
+        }
         grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for route in routes:
-            key = str(route.get("next_hop") or route.get("destination_hash") or "unknown")
+            key = str(
+                route.get("next_hop") or route.get("destination_hash") or "unknown"
+            )
             grouped[key].append(route)
 
         total_routes = max(len(routes), 1)
         rows: list[dict[str, Any]] = []
         for node_id, items in grouped.items():
-            hop_values = [int(item.get("hop_count") or 0) for item in items if item.get("hop_count") is not None]
-            destinations = [self._short_id(str(item.get("destination_hash") or "")) for item in items][:5]
-            interfaces = sorted({str(item.get("via_interface") or "unknown") for item in items})
+            hop_values = [
+                int(item.get("hop_count") or 0)
+                for item in items
+                if item.get("hop_count") is not None
+            ]
+            destinations = [
+                self._short_id(str(item.get("destination_hash") or ""))
+                for item in items
+            ][:5]
+            interfaces = sorted(
+                {str(item.get("via_interface") or "unknown") for item in items}
+            )
             rows.append(
                 {
                     "node_id": node_id,
                     "label": self._peer_label(node_id, peers_by_hash),
-                    "classification": "relay" if node_id in peers_by_hash else "destination",
+                    "classification": "relay"
+                    if node_id in peers_by_hash
+                    else "destination",
                     "route_count": len(items),
                     "impact_score": round(len(items) / total_routes * 100, 1),
-                    "avg_hops": round(sum(hop_values) / len(hop_values), 1) if hop_values else 0.0,
+                    "avg_hops": round(sum(hop_values) / len(hop_values), 1)
+                    if hop_values
+                    else 0.0,
                     "interfaces": interfaces,
                     "sample_destinations": destinations,
                 }
             )
-        rows.sort(key=lambda item: (float(item["impact_score"]), int(item["route_count"])), reverse=True)
+        rows.sort(
+            key=lambda item: (float(item["impact_score"]), int(item["route_count"])),
+            reverse=True,
+        )
         return rows[:limit]
 
-    async def path_changes(self, recent_limit: int = 80, since_minutes: int = 10080) -> dict[str, Any]:
+    async def path_changes(
+        self, recent_limit: int = 80, since_minutes: int = 10080
+    ) -> dict[str, Any]:
         current_routes = await self.route_service.list_routes(limit=500)
         current_by_destination = {
-            str(item.get("destination_hash") or ""): item for item in current_routes if item.get("destination_hash")
+            str(item.get("destination_hash") or ""): item
+            for item in current_routes
+            if item.get("destination_hash")
         }
         route_events = [
             event
@@ -394,18 +494,26 @@ class TopologyService:
             route_events = [
                 item
                 for item in route_events
-                if (parsed := self._parse_timestamp(str(item.get("created_at") or ""))) is not None
+                if (parsed := self._parse_timestamp(str(item.get("created_at") or "")))
+                is not None
                 and parsed.timestamp() >= cutoff
             ]
 
         normalized_events = [
             self._normalize_route_event(event, current_by_destination)
             for event in route_events
-            if str((event.get("payload") or {}).get("destination_hash") or event.get("message") or "").strip()
+            if str(
+                (event.get("payload") or {}).get("destination_hash")
+                or event.get("message")
+                or ""
+            ).strip()
             or str(event.get("event_type") or "").startswith("route.")
         ]
         normalized_events.sort(
-            key=lambda item: self._parse_timestamp(str(item.get("created_at") or "")) or datetime.min.replace(tzinfo=timezone.utc),
+            key=lambda item: (
+                self._parse_timestamp(str(item.get("created_at") or ""))
+                or datetime.min.replace(tzinfo=timezone.utc)
+            ),
             reverse=True,
         )
 
@@ -435,8 +543,12 @@ class TopologyService:
                         "current_route": current_by_destination.get(destination_hash),
                     },
                 )
-                destination_row["change_count"] = int(destination_row["change_count"]) + 1
-                destination_row[change_type] = int(destination_row.get(change_type) or 0) + 1
+                destination_row["change_count"] = (
+                    int(destination_row["change_count"]) + 1
+                )
+                destination_row[change_type] = (
+                    int(destination_row.get(change_type) or 0) + 1
+                )
                 if destination_row["last_change_at"] is None:
                     destination_row["last_change_at"] = item.get("created_at")
                     destination_row["last_change_type"] = change_type
@@ -462,13 +574,17 @@ class TopologyService:
         for row in destinations.values():
             volatility_score = min(
                 100,
-                int(row["added"]) * 15 + int(row["changed"]) * 28 + int(row["removed"]) * 32,
+                int(row["added"]) * 15
+                + int(row["changed"]) * 28
+                + int(row["removed"]) * 32,
             )
             destination_rows.append(
                 {
                     **row,
                     "volatility_score": volatility_score,
-                    "current_interface": (row.get("current_route") or {}).get("via_interface"),
+                    "current_interface": (row.get("current_route") or {}).get(
+                        "via_interface"
+                    ),
                     "current_hops": (row.get("current_route") or {}).get("hop_count"),
                 }
             )
@@ -486,11 +602,24 @@ class TopologyService:
         ]
         for row in interface_rows:
             row.pop("destinations", None)
-        interface_rows.sort(key=lambda item: (int(item["change_count"]), item["interface_name"]), reverse=True)
+        interface_rows.sort(
+            key=lambda item: (int(item["change_count"]), item["interface_name"]),
+            reverse=True,
+        )
 
         route_baseline = max(len(current_routes), len(destination_rows), 1)
-        weighted_changes = totals.get("added", 0) + totals.get("changed", 0) * 2 + totals.get("removed", 0) * 2
-        volatility_score = min(100, round(weighted_changes / route_baseline * 18 + min(len(destination_rows) * 4, 24)))
+        weighted_changes = (
+            totals.get("added", 0)
+            + totals.get("changed", 0) * 2
+            + totals.get("removed", 0) * 2
+        )
+        volatility_score = min(
+            100,
+            round(
+                weighted_changes / route_baseline * 18
+                + min(len(destination_rows) * 4, 24)
+            ),
+        )
 
         return {
             "generated_at": self._now_iso(),
@@ -515,90 +644,147 @@ class TopologyService:
 
         findings: list[dict[str, Any]] = []
         recommendations: list[str] = []
+        recommendation_codes: list[str] = []
+        peers_supported = self.settings.reticulum.backend == "mock_process"
         score = 100
 
-        if snapshot["overview"]["peer_count"] == 0:
+        if not peers_supported:
+            findings.append(
+                {
+                    "severity": "info",
+                    "code": "peers_unavailable",
+                    "title": "Peer observation is unavailable",
+                    "message": "This backend does not provide peer observations. Missing peer data does not establish a connectivity failure.",
+                }
+            )
+            recommendations.append(
+                "Use interface state and learned paths to inspect this node; a complete topology score is not available."
+            )
+            recommendation_codes.append("peers_unavailable")
+        elif snapshot["overview"]["peer_count"] == 0:
             score -= 35
             findings.append(
                 {
-                    "severity": "critical",
-                    "title": "No peers discovered",
-                    "message": "The node has not observed any peers yet, so network reachability may be limited.",
+                    "severity": "info",
+                    "code": "no_peers",
+                    "title": "No peer observations",
+                    "message": "No peers have been observed in the available data. This alone does not establish current reachability.",
                 }
             )
-            recommendations.append("Verify at least one interface has healthy connectivity and announce traffic.")
+            recommendations.append(
+                "Verify at least one interface has healthy connectivity and announce traffic."
+            )
+            recommendation_codes.append("no_peers")
 
         if snapshot["overview"]["route_count"] == 0:
             score -= 30
             findings.append(
                 {
-                    "severity": "critical",
-                    "title": "No learned routes",
-                    "message": "The routing table is empty, which means the node is not forwarding beyond direct presence.",
+                    "severity": "info",
+                    "code": "no_paths",
+                    "title": "No learned paths",
+                    "message": "The sampled path table is empty. This alone does not prove that the node cannot forward traffic.",
                 }
             )
-            recommendations.append("Check interface configuration and allow time for path learning to stabilize.")
+            recommendations.append(
+                "Allow time for path learning, then check interface state if expected destinations remain absent."
+            )
+            recommendation_codes.append("no_paths")
 
         if snapshot["overview"]["active_interfaces"] <= 1:
             score -= 12
             findings.append(
                 {
                     "severity": "warning",
-                    "title": "Single active interface dependency",
-                    "message": "Only one interface is currently active, increasing dependence on a single uplink.",
+                    "code": "few_interfaces",
+                    "title": "Fewer than two active interfaces",
+                    "message": "Fewer than two interfaces are reported as running. The need for redundancy depends on the deployment.",
                 }
             )
-            recommendations.append("Add or recover a second interface to improve resilience.")
+            recommendations.append(
+                "Review the expected interfaces; add or recover another interface if redundancy is required."
+            )
+            recommendation_codes.append("few_interfaces")
 
-        if critical_nodes and float(critical_nodes[0]["impact_score"]) >= 60 and snapshot["overview"]["route_count"] >= 2:
+        if (
+            critical_nodes
+            and float(critical_nodes[0]["impact_score"]) >= 60
+            and snapshot["overview"]["route_count"] >= 2
+        ):
             score -= 10
             findings.append(
                 {
                     "severity": "warning",
+                    "code": "path_concentration",
+                    "parameters": {
+                        "node": critical_nodes[0]["label"],
+                        "percent": critical_nodes[0]["impact_score"],
+                    },
                     "title": "Route concentration detected",
-                    "message": f"Top relay {critical_nodes[0]['label']} carries {critical_nodes[0]['impact_score']}% of known routes.",
+                    "message": f"{critical_nodes[0]['impact_score']}% of recorded paths refer to {critical_nodes[0]['label']}. This is a path count, not a measured share of traffic.",
                 }
             )
-            recommendations.append("Diversify upstream relays or add additional reachable neighbors.")
+            recommendations.append(
+                "Diversify upstream relays or add additional reachable neighbors."
+            )
+            recommendation_codes.append("path_concentration")
 
-        long_path_rows = [row for row in heatmap["rows"] if float(row.get("avg_hops") or 0) >= 3]
+        long_path_rows = [
+            row for row in heatmap["rows"] if float(row.get("avg_hops") or 0) >= 3
+        ]
         if long_path_rows:
             score -= 8
             findings.append(
                 {
                     "severity": "info",
+                    "code": "long_paths",
                     "title": "Longer path lengths observed",
                     "message": "Some interfaces are learning routes with average hop counts of three or more.",
                 }
             )
 
-        isolated_segments = [segment for segment in network_map["segments"] if segment.get("connectivity") == "isolated"]
+        isolated_segments = [
+            segment
+            for segment in network_map["segments"]
+            if segment.get("connectivity") == "isolated"
+        ]
         if isolated_segments:
             score -= min(5 * len(isolated_segments), 15)
             findings.append(
                 {
-                    "severity": "warning",
-                    "title": "Isolated interface segments",
-                    "message": f"{len(isolated_segments)} interface segment(s) show no peers or routes.",
+                    "severity": "info",
+                    "code": "no_segment_data",
+                    "parameters": {"count": len(isolated_segments)},
+                    "title": "Interfaces without peer or path records",
+                    "message": f"{len(isolated_segments)} interface segment(s) have no peer or path records. This does not prove physical isolation.",
                 }
             )
-            recommendations.append("Inspect isolated interfaces for device, link, or radio-level faults.")
+            recommendations.append(
+                "Check expected traffic and observation coverage before diagnosing an interface fault."
+            )
+            recommendation_codes.append("no_segment_data")
 
         if not findings:
             findings.append(
                 {
                     "severity": "healthy",
-                    "title": "Topology looks stable",
-                    "message": "Peers, routes, and interfaces are balanced with no obvious structural risks.",
+                    "code": "no_findings",
+                    "title": "No findings under the current rules",
+                    "message": "The current observations did not trigger the configured topology heuristics. This is not a guarantee of network health.",
                 }
             )
-            recommendations.append("Keep monitoring route diversity and interface health over time.")
+            recommendations.append(
+                "Keep monitoring route diversity and interface health over time."
+            )
+            recommendation_codes.append("no_findings")
 
         score = max(0, min(score, 100))
         return {
             "generated_at": self._now_iso(),
-            "score": score,
+            "score": score if peers_supported else None,
+            "score_available": peers_supported,
             "overview": snapshot["overview"],
             "findings": findings,
             "recommendations": recommendations,
+            "recommendation_codes": recommendation_codes,
         }

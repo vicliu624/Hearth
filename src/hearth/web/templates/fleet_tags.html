@@ -1,11 +1,11 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 
 {% block content %}
 <section class="page-hero">
   <div>
     <p class="page-kicker">{{ t("nav.fleet") }}</p>
     <h1>{{ t("page.tags") }}</h1>
-    <p class="page-subtitle">{{ page_total }} {{ t("fleet.tags_total") }}</p>
+    <p class="page-subtitle">{{ t("count.tags", count=page_total) }}</p>
   </div>
   <div class="inline-form">
     <a class="button-link" href="{{ fleet_href }}">{{ t("page.fleet") }}</a>

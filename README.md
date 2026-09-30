@@ -1,4 +1,6 @@
-﻿# Hearth
+# Hearth
+
+**v0.2:** [Changelog](CHANGELOG.md) · [Upgrade guide](docs/upgrade-v0.2.md) · [Performance measurements](docs/performance-v0.2.md)
 
 > Personal Reticulum infrastructure for individuals, homes, and small communities.
 
@@ -247,7 +249,7 @@ Its goal is to make this workflow normal:
 ---
 
 ## Current Status
-Hearth is currently at **v0.1.0**.
+Hearth is currently at **v0.2.0**.
 
 Today, the repository already includes a substantial control-plane implementation with a working Web UI, CLI, REST API, storage layer, configuration workflows, and a broad set of operational pages.
 

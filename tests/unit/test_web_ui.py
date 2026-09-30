@@ -10,13 +10,19 @@ from fastapi.testclient import TestClient
 
 from hearth.api.main import create_app
 from hearth.crypto.ed25519 import public_key_from_seed, sign
-from hearth.web.views import build_activity_bars, build_traffic_snapshot, summarize_activity_history
+from hearth.web.views import (
+    build_activity_bars,
+    build_traffic_snapshot,
+    summarize_activity_history,
+)
 
 
 TEST_SOURCE_SEED = bytes.fromhex("1f" * 32)
 
 
-def _build_signed_source_manifest(label: str, description: str, plugins: list[str]) -> tuple[dict, str, str]:
+def _build_signed_source_manifest(
+    label: str, description: str, plugins: list[str]
+) -> tuple[dict, str, str]:
     public_key = f"ed25519:{public_key_from_seed(TEST_SOURCE_SEED).hex()}"
     payload = {
         "label": label,
@@ -25,7 +31,9 @@ def _build_signed_source_manifest(label: str, description: str, plugins: list[st
         "public_key": public_key,
         "signature_algorithm": "ed25519",
     }
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    canonical = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
     digest = hashlib.sha256(canonical).hexdigest()
     payload["signature"] = f"ed25519:{sign(TEST_SOURCE_SEED, canonical).hex()}"
     return payload, public_key, digest
@@ -71,18 +79,18 @@ def test_ui_missing_pages_render(tmp_path: Path) -> None:
         announces_page = client.get("/announces?lang=en")
 
     assert dashboard_page.status_code == 200
-    assert "Recorded Traffic (Last 24 Hours)" in dashboard_page.text
-    assert "RX Packets" in dashboard_page.text
-    assert "TX Packets" in dashboard_page.text
+    assert "Observed traffic over the last 24 hours" in dashboard_page.text
+    assert "Bytes received" in dashboard_page.text
+    assert "Bytes sent" in dashboard_page.text
     assert interfaces_page.status_code == 200
     assert "Interfaces" in interfaces_page.text
     assert "tcp_backbone" in interfaces_page.text
     assert peers_page.status_code == 200
-    assert "Recent Peers" in peers_page.text
+    assert "Recently observed peers" in peers_page.text
     assert routes_page.status_code == 200
-    assert "Route Table" in routes_page.text
+    assert "Path table" in routes_page.text
     assert announces_page.status_code == 200
-    assert "Recent Announcements" in announces_page.text
+    assert "Recent announces" in announces_page.text
 
 
 def test_ui_interface_control_and_system_page(tmp_path: Path) -> None:
@@ -92,7 +100,10 @@ def test_ui_interface_control_and_system_page(tmp_path: Path) -> None:
     app = create_app(settings_path=config_path)
     with TestClient(app) as client:
         entry = client.get("/interfaces?lang=en&token=ui-secret")
-        controlled = client.post("/interfaces/tcp_backbone/control", data={"action": "restart", "selected": "tcp_backbone"})
+        controlled = client.post(
+            "/interfaces/tcp_backbone/control",
+            data={"action": "restart", "selected": "tcp_backbone"},
+        )
         system_page = client.get("/system")
 
     assert entry.status_code == 200
@@ -112,17 +123,30 @@ def test_ui_config_and_backup_forms(tmp_path: Path) -> None:
     with TestClient(app) as client:
         config_page = client.get("/config?lang=en&token=ui-secret")
         validated = client.post("/config", data={"action": "validate", "raw": raw_text})
-        exported = client.post("/backup", data={"action": "export", "destination_path": str(tmp_path / "ui-backup.tar.gz")})
-        backup_detail = client.get("/backup/detail", params={"lang": "en", "token": "ui-secret", "archive": str(tmp_path / "ui-backup.tar.gz")})
+        exported = client.post(
+            "/backup",
+            data={
+                "action": "export",
+                "destination_path": str(tmp_path / "ui-backup.tar.gz"),
+            },
+        )
+        backup_detail = client.get(
+            "/backup/detail",
+            params={
+                "lang": "en",
+                "token": "ui-secret",
+                "archive": str(tmp_path / "ui-backup.tar.gz"),
+            },
+        )
 
     assert config_page.status_code == 200
-    assert "Config Editor" in config_page.text
+    assert "Configuration editor" in config_page.text
     assert validated.status_code == 200
     assert "Configuration is valid." in validated.text
     assert exported.status_code == 200
     assert "Backup exported." in exported.text
     assert backup_detail.status_code == 200
-    assert "Backup Detail" in backup_detail.text
+    assert "Backup details" in backup_detail.text
     assert "ui-backup.tar.gz" in backup_detail.text
     assert (tmp_path / "ui-backup.tar.gz").exists()
 
@@ -133,22 +157,22 @@ def test_dashboard_activity_history_uses_recorded_samples() -> None:
         [
             {
                 "interface_name": "tcp_backbone",
-                "rx_packets": 10,
-                "tx_packets": 4,
+                "rx_bytes": 10,
+                "tx_bytes": 4,
                 "error_count": 0,
                 "captured_at": (now - timedelta(hours=4)).isoformat(),
             },
             {
                 "interface_name": "tcp_backbone",
-                "rx_packets": 22,
-                "tx_packets": 9,
+                "rx_bytes": 22,
+                "tx_bytes": 9,
                 "error_count": 1,
                 "captured_at": (now - timedelta(hours=2)).isoformat(),
             },
             {
                 "interface_name": "tcp_backbone",
-                "rx_packets": 40,
-                "tx_packets": 15,
+                "rx_bytes": 40,
+                "tx_bytes": 15,
                 "error_count": 1,
                 "captured_at": now.isoformat(),
             },
@@ -161,8 +185,8 @@ def test_dashboard_activity_history_uses_recorded_samples() -> None:
 
     assert len(bars) == 12
     assert any(int(point["rx_height"]) > 0 for point in bars)
-    assert snapshot["rx_packets"] == "30"
-    assert snapshot["tx_packets"] == "11"
+    assert snapshot["rx_bytes"] == "30"
+    assert snapshot["tx_bytes"] == "11"
     assert snapshot["error_count"] == 1
 
 
@@ -180,7 +204,7 @@ def test_ui_interface_detail_health_and_login_pages(tmp_path: Path) -> None:
     assert "Interface Details" in interface_detail.text
     assert "tcp_backbone" in interface_detail.text
     assert health_page.status_code == 200
-    assert "Health Score" in health_page.text
+    assert "Health score" in health_page.text
     assert "Restart History" in health_page.text
     assert login_page.status_code == 200
     assert "Admin Login" in login_page.text
@@ -213,19 +237,20 @@ def test_ui_peer_route_and_announce_detail_pages(tmp_path: Path) -> None:
         routes_payload = client.get("/api/routes").json()
         announces_payload = client.get("/api/announces").json()
         peer_page = client.get(f"/peers/{peers_payload[0]['peer_hash']}?lang=en")
-        route_page = client.get(f"/routes/{routes_payload[0]['destination_hash']}?lang=en")
+        route_page = client.get(
+            f"/routes/{routes_payload[0]['destination_hash']}?lang=en"
+        )
         announce_page = client.get(f"/announces/{announces_payload[0]['id']}?lang=en")
 
     assert peer_page.status_code == 200
-    assert "Peer Details" in peer_page.text
+    assert "Peer details" in peer_page.text
     assert peers_payload[0]["peer_hash"] in peer_page.text
     assert route_page.status_code == 200
     assert "Current State" in route_page.text
     assert routes_payload[0]["destination_hash"] in route_page.text
     assert announce_page.status_code == 200
-    assert "Announcement Details" in announce_page.text
+    assert "Announce details" in announce_page.text
     assert announces_payload[0]["source_hash"] in announce_page.text
-
 
 
 def test_ui_profile_security_and_audit_pages(tmp_path: Path) -> None:
@@ -246,11 +271,11 @@ def test_ui_profile_security_and_audit_pages(tmp_path: Path) -> None:
 
     assert login_response.status_code == 303
     assert profile_page.status_code == 200
-    assert "Current Identity" in profile_page.text
-    assert "Security Posture" in profile_page.text
+    assert "Current account and role" in profile_page.text
+    assert "Security status" in profile_page.text
     assert security_page.status_code == 200
-    assert "Access Policy" in security_page.text
-    assert "Browser Protection" in security_page.text
+    assert "Access policy" in security_page.text
+    assert "Browser security headers" in security_page.text
     assert audit_page.status_code == 200
     assert "Filters" in audit_page.text
     assert "auth.login_succeeded" in audit_page.text
@@ -270,14 +295,30 @@ def test_ui_maintenance_users_roles_and_tokens_pages(tmp_path: Path) -> None:
         tokens_page = client.get("/tokens?lang=en&token=ui-secret")
         created_user = client.post(
             "/users?lang=en&token=ui-secret",
-            data={"action": "create_user", "username": "alice", "display_name": "Alice", "role": "operator"},
+            data={
+                "action": "create_user",
+                "username": "alice",
+                "display_name": "Alice",
+                "role": "operator",
+            },
         )
         created_token = client.post(
             "/tokens?lang=en&token=ui-secret",
-            data={"action": "create_token", "token_name": "alice-ops", "owner_username": "alice", "role": "operator", "scopes": "read,operate", "expires_days": "0"},
+            data={
+                "action": "create_token",
+                "token_name": "alice-ops",
+                "owner_username": "alice",
+                "role": "operator",
+                "scopes": "read,operate",
+                "expires_days": "0",
+            },
         )
         issued_token = re.search(r"htk_[A-Za-z0-9_-]+", created_token.text)
-        profile_with_new_token = client.get(f"/profile?lang=en&token={issued_token.group(0)}") if issued_token else None
+        profile_with_new_token = (
+            client.get(f"/profile?lang=en&token={issued_token.group(0)}")
+            if issued_token
+            else None
+        )
 
     assert maintenance_page.status_code == 200
     assert "Maintenance" in maintenance_page.text
@@ -295,7 +336,6 @@ def test_ui_maintenance_users_roles_and_tokens_pages(tmp_path: Path) -> None:
     assert profile_with_new_token is not None
     assert profile_with_new_token.status_code == 200
     assert "alice" in profile_with_new_token.text
-
 
 
 PLUGIN_UI_CONFIG = """
@@ -348,7 +388,7 @@ config = { format = "prometheus" }
 """.strip()
 
 
-def test_ui_zh_locale_falls_back_from_corrupted_translations(tmp_path: Path) -> None:
+def test_ui_zh_locale_uses_reviewed_chinese_translations(tmp_path: Path) -> None:
     config_path = tmp_path / "hearth.toml"
     config_path.write_text(PLUGIN_UI_CONFIG, encoding="utf-8")
 
@@ -358,9 +398,9 @@ def test_ui_zh_locale_falls_back_from_corrupted_translations(tmp_path: Path) -> 
         profile_page = client.get("/profile?lang=zh-CN&token=ui-secret")
 
     assert plugins_page.status_code == 200
-    assert "Hearth Plugins" in plugins_page.text
+    assert "插件管理" in plugins_page.text
     assert profile_page.status_code == 200
-    assert "Profile" in profile_page.text
+    assert "账号信息" in profile_page.text
     assert "????" not in plugins_page.text
     assert "????" not in profile_page.text
 
@@ -394,21 +434,33 @@ signature_required = true
     with TestClient(app) as client:
         plugins_page = client.get("/plugins?lang=en&token=ui-secret")
         plugin_sources_page = client.get("/plugin-sources?lang=en&token=ui-secret")
-        plugin_sources_refresh = client.post("/plugin-sources?lang=en&token=ui-secret", data={"action": "refresh"})
-        plugin_detail_page = client.get("/plugins/matrix_bridge?lang=en&token=ui-secret")
-        plugin_toggle = client.post("/plugins/metrics_exporter?lang=en&token=ui-secret", data={"action": "enable"})
+        plugin_sources_refresh = client.post(
+            "/plugin-sources?lang=en&token=ui-secret", data={"action": "refresh"}
+        )
+        plugin_detail_page = client.get(
+            "/plugins/matrix_bridge?lang=en&token=ui-secret"
+        )
+        plugin_toggle = client.post(
+            "/plugins/metrics_exporter?lang=en&token=ui-secret",
+            data={"action": "enable"},
+        )
         services_page = client.get("/services?lang=en&token=ui-secret")
-        service_detail_page = client.get("/services/reticulum_runtime?lang=en&token=ui-secret")
-        service_action = client.post("/services/observation_sync?lang=en&token=ui-secret", data={"action": "sync"})
+        service_detail_page = client.get(
+            "/services/reticulum_runtime?lang=en&token=ui-secret"
+        )
+        service_action = client.post(
+            "/services/observation_sync?lang=en&token=ui-secret",
+            data={"action": "sync"},
+        )
         missing_plugin = client.get("/plugins/not-real?lang=en&token=ui-secret")
 
     assert plugins_page.status_code == 200
-    assert "Plugin Sources" in plugins_page.text
+    assert "Plugin sources" in plugins_page.text
     assert "matrix_bridge" in plugins_page.text
     assert plugin_sources_page.status_code == 200
     assert "community" in plugin_sources_page.text
     assert "Community Mirror" in plugin_sources_page.text
-    assert "Plugin Sources" in plugin_sources_page.text
+    assert "Plugin sources" in plugin_sources_page.text
     assert "Index URL" in plugin_sources_page.text
     assert "Available Plugins" in plugin_sources_page.text
     assert plugin_sources_refresh.status_code == 200
@@ -416,26 +468,25 @@ signature_required = true
     assert "Last Sync" in plugin_sources_refresh.text
     assert "plugin-sources-index.json" in plugin_sources_refresh.text
     assert "mesh_bridge" in plugin_sources_refresh.text
-    assert "Signature Status" in plugin_sources_refresh.text
-    assert "Signature Algorithm" in plugin_sources_refresh.text
-    assert "Public Key" in plugin_sources_refresh.text
+    assert "Signature verification" in plugin_sources_refresh.text
+    assert "Signature algorithm" in plugin_sources_refresh.text
+    assert "Signing public key" in plugin_sources_refresh.text
     assert "ed25519" in plugin_sources_refresh.text
     assert "Verified" in plugin_sources_refresh.text
     assert plugin_detail_page.status_code == 200
-    assert "Dependencies" in plugin_detail_page.text
-    assert "Diagnostics" in plugin_detail_page.text
+    assert "Plugin dependencies" in plugin_detail_page.text
+    assert "Plugin diagnostics" in plugin_detail_page.text
     assert plugin_toggle.status_code == 200
     assert "Plugin state updated." in plugin_toggle.text
     assert services_page.status_code == 200
-    assert "Resource Summary" in services_page.text
+    assert "Resource usage" in services_page.text
     assert service_detail_page.status_code == 200
-    assert "Health Checks" in service_detail_page.text
-    assert "Recent Logs" in service_detail_page.text
+    assert "Health checks" in service_detail_page.text
+    assert "Recent logs" in service_detail_page.text
     assert service_action.status_code == 200
-    assert "Service action completed." in service_action.text
+    assert "Service operation completed." in service_action.text
     assert missing_plugin.status_code == 404
     assert "requested plugin was not found" in missing_plugin.text
-
 
 
 def test_ui_fleet_pages_and_config_revisions(tmp_path: Path) -> None:
@@ -444,13 +495,20 @@ def test_ui_fleet_pages_and_config_revisions(tmp_path: Path) -> None:
 
     app = create_app(settings_path=config_path)
     original_raw = config_path.read_text(encoding="utf-8")
-    updated_raw = original_raw.replace('node_name = "ui-node"', 'node_name = "ui-node-v2"', 1)
+    updated_raw = original_raw.replace(
+        'node_name = "ui-node"', 'node_name = "ui-node-v2"', 1
+    )
     with TestClient(app) as client:
         context = app.state.context
         fleet_page = client.get("/fleet?lang=en&token=ui-secret")
         groups_post = client.post(
             "/fleet/groups?lang=en&token=ui-secret",
-            data={"action": "create_group", "name": "home-core", "description": "Home nodes", "group_type": "home"},
+            data={
+                "action": "create_group",
+                "name": "home-core",
+                "description": "Home nodes",
+                "group_type": "home",
+            },
         )
         nodes_post = client.post(
             "/fleet/nodes?lang=en&token=ui-secret",
@@ -484,62 +542,75 @@ def test_ui_fleet_pages_and_config_revisions(tmp_path: Path) -> None:
         health_page = client.get("/fleet/health?lang=en&token=ui-secret")
         events_page = client.get("/fleet/events?lang=en&token=ui-secret")
         api_docs_page = client.get("/api-docs?lang=en&token=ui-secret")
-        config_saved = client.post("/config?lang=en&token=ui-secret", data={"action": "save", "raw": updated_raw})
+        config_saved = client.post(
+            "/config?lang=en&token=ui-secret",
+            data={"action": "save", "raw": updated_raw},
+        )
         config_page = client.get("/config?lang=en&token=ui-secret")
         revisions = context.config_version_service.list_revisions(limit=10)
         baseline_revision_id = revisions[-1]["id"]
         config_history_page = client.get("/config/history?lang=en&token=ui-secret")
-        config_review_page = client.get(f"/config/review/{baseline_revision_id}?lang=en&token=ui-secret")
-        config_restore = client.post(f"/config/review/{baseline_revision_id}?lang=en&token=ui-secret")
+        config_review_page = client.get(
+            f"/config/review/{baseline_revision_id}?lang=en&token=ui-secret"
+        )
+        config_restore = client.post(
+            f"/config/review/{baseline_revision_id}?lang=en&token=ui-secret"
+        )
 
     assert fleet_page.status_code == 200
-    assert "Fleet Dashboard" in fleet_page.text
+    assert "Fleet overview" in fleet_page.text
     assert groups_post.status_code == 200
     assert "Node group saved." in groups_post.text
     assert nodes_post.status_code == 200
-    assert "Fleet inventory updated." in nodes_post.text
+    assert "Node inventory updated." in nodes_post.text
     assert templates_post.status_code == 200
-    assert "Config template saved." in templates_post.text
+    assert "Configuration template saved." in templates_post.text
     assert inventory_page.status_code == 200
-    assert "Nodes Inventory" in inventory_page.text
+    assert "Node inventory" in inventory_page.text
     assert "relay-west" in inventory_page.text
     assert node_detail_page.status_code == 200
-    assert "Node Detail" in node_detail_page.text
+    assert "Node details" in node_detail_page.text
     assert "home-default" in node_detail_page.text
     assert groups_page.status_code == 200
-    assert "Node Groups" in groups_page.text
+    assert "Node groups" in groups_page.text
     assert "home-core" in groups_page.text
     assert templates_page.status_code == 200
-    assert "Templates" in templates_page.text
+    assert "Configuration templates" in templates_page.text
     assert "home-default" in templates_page.text
     assert tags_page.status_code == 200
-    assert "Tags" in tags_page.text
+    assert "Node tags" in tags_page.text
     assert "relay" in tags_page.text
     assert health_page.status_code == 200
-    assert "Fleet Health" in health_page.text
+    assert "Fleet health" in health_page.text
     assert events_page.status_code == 200
-    assert "Fleet Events" in events_page.text
+    assert "Fleet events" in events_page.text
     assert "relay-west" in events_page.text
     assert api_docs_page.status_code == 200
     assert "Swagger UI" in api_docs_page.text
     assert "/openapi.json" in api_docs_page.text
     assert config_saved.status_code == 200
-    assert "Configuration saved." in config_saved.text
+    assert "Configuration draft saved; changes are not active yet." in config_saved.text
     assert config_page.status_code == 200
-    assert "Revision History" in config_page.text
+    assert "Configuration revisions" in config_page.text
     assert config_history_page.status_code == 200
-    assert "Config History" in config_history_page.text
+    assert "Configuration history" in config_history_page.text
     assert config_review_page.status_code == 200
-    assert "Config Review" in config_review_page.text
+    assert "Configuration review" in config_review_page.text
     assert config_restore.status_code == 200
-    assert "Configuration revision restored." in config_restore.text
-
+    assert (
+        "The revision has been restored to the configuration draft. Apply it to activate the change."
+        in config_restore.text
+    )
 
 
 def test_ui_bridges_metrics_alerts_and_diagnostics_pages(tmp_path: Path) -> None:
     config_path = tmp_path / "hearth.toml"
     config_path.write_text(
-        PLUGIN_UI_CONFIG.replace('admin_token = "ui-secret"', 'admin_token = "change-me"\nallow_wan = true', 1),
+        PLUGIN_UI_CONFIG.replace(
+            'admin_token = "ui-secret"',
+            'admin_token = "change-me"\nallow_wan = true',
+            1,
+        ),
         encoding="utf-8",
     )
 
@@ -551,20 +622,19 @@ def test_ui_bridges_metrics_alerts_and_diagnostics_pages(tmp_path: Path) -> None
         diagnostics_page = client.get("/diagnostics?lang=en&token=change-me")
 
     assert bridges_page.status_code == 200
-    assert "Bridge Services" in bridges_page.text
+    assert "Bridge services" in bridges_page.text
     assert "Matrix Bridge" in bridges_page.text
     assert metrics_page.status_code == 200
-    assert "Metrics Dashboard" in metrics_page.text
-    assert "Prometheus Endpoint" in metrics_page.text
+    assert "Runtime metrics" in metrics_page.text
+    assert "Prometheus endpoint" in metrics_page.text
     assert alerts_page.status_code == 200
-    assert "Active Alerts" in alerts_page.text
-    assert "Security Findings" in alerts_page.text
-    assert "Hook Status" in alerts_page.text
+    assert "Active alerts" in alerts_page.text
+    assert "Security findings" in alerts_page.text
+    assert "Webhook delivery status" in alerts_page.text
     assert "Alert History" in alerts_page.text
     assert diagnostics_page.status_code == 200
-    assert "Developer Diagnostics" in diagnostics_page.text
-    assert "Runtime Snapshot" in diagnostics_page.text
-
+    assert "System diagnostics" in diagnostics_page.text
+    assert "Runtime state snapshot" in diagnostics_page.text
 
 
 def test_ui_bridge_detail_and_controls(tmp_path: Path) -> None:
@@ -594,30 +664,37 @@ signature_required = true
     app = create_app(settings_path=config_path)
     with TestClient(app) as client:
         detail_page = client.get("/bridges/matrix_bridge?lang=en&token=ui-secret")
-        sync_page = client.post("/bridges/matrix_bridge?lang=en&token=ui-secret", data={"action": "sync"})
-        test_delivery_page = client.post("/bridges/matrix_bridge?lang=en&token=ui-secret", data={"action": "test_delivery"})
-        disable_page = client.post("/bridges/matrix_bridge?lang=en&token=ui-secret", data={"action": "disable"})
+        sync_page = client.post(
+            "/bridges/matrix_bridge?lang=en&token=ui-secret", data={"action": "sync"}
+        )
+        test_delivery_page = client.post(
+            "/bridges/matrix_bridge?lang=en&token=ui-secret",
+            data={"action": "test_delivery"},
+        )
+        disable_page = client.post(
+            "/bridges/matrix_bridge?lang=en&token=ui-secret", data={"action": "disable"}
+        )
 
     assert detail_page.status_code == 200
-    assert "Bridge Details" in detail_page.text
-    assert "Source Security" in detail_page.text
-    assert "Health Checks" in detail_page.text
-    assert "Recent Operations" in detail_page.text
-    assert "Test Delivery" in detail_page.text
-    assert "Disable Bridge" in detail_page.text
+    assert "Bridge details" in detail_page.text
+    assert "Plugin source security" in detail_page.text
+    assert "Health checks" in detail_page.text
+    assert "Recent operations" in detail_page.text
+    assert "Test delivery" in detail_page.text
+    assert "Disable bridge" in detail_page.text
     assert sync_page.status_code == 200
-    assert "Bridge action completed." in sync_page.text
-    assert "Signature Status" in sync_page.text
-    assert "Signature Algorithm" in sync_page.text
-    assert "Public Key" in sync_page.text
+    assert "Bridge operation completed." in sync_page.text
+    assert "Signature verification" in sync_page.text
+    assert "Signature algorithm" in sync_page.text
+    assert "Signing public key" in sync_page.text
     assert "Verified" in sync_page.text
     assert source_digest in sync_page.text
     assert test_delivery_page.status_code == 200
-    assert "Bridge action completed." in test_delivery_page.text
+    assert "Bridge operation completed." in test_delivery_page.text
     assert "simulated" in test_delivery_page.text
     assert disable_page.status_code == 200
-    assert "Bridge action completed." in disable_page.text
-    assert "Enable Bridge" in disable_page.text
+    assert "Bridge operation completed." in disable_page.text
+    assert "Enable bridge" in disable_page.text
 
 
 TOPOLOGY_UI_CONFIG = """
@@ -661,21 +738,23 @@ def test_ui_topology_pages(tmp_path: Path) -> None:
         topology_page = client.get("/topology?lang=en&token=topology-secret")
         network_map_page = client.get("/network-map?lang=en&token=topology-secret")
         heatmap_page = client.get("/route-heatmap?lang=en&token=topology-secret")
-        critical_nodes_page = client.get("/critical-nodes?lang=en&token=topology-secret")
+        critical_nodes_page = client.get(
+            "/critical-nodes?lang=en&token=topology-secret"
+        )
         insights_page = client.get("/network-insights?lang=en&token=topology-secret")
 
     assert topology_page.status_code == 200
-    assert "Network Topology" in topology_page.text
+    assert "Network topology" in topology_page.text
     assert "tcp_backbone" in topology_page.text
     assert network_map_page.status_code == 200
-    assert "Network Map" in network_map_page.text
+    assert "Network map" in network_map_page.text
     assert "lan_bridge" in network_map_page.text
     assert heatmap_page.status_code == 200
-    assert "Route Heatmap" in heatmap_page.text
+    assert "Path distribution heatmap" in heatmap_page.text
     assert critical_nodes_page.status_code == 200
-    assert "Critical Nodes" in critical_nodes_page.text
+    assert "Critical node analysis" in critical_nodes_page.text
     assert insights_page.status_code == 200
-    assert "Network Insights" in insights_page.text
+    assert "Network analysis" in insights_page.text
 
 
 def test_ui_timeline_and_path_changes_pages(tmp_path: Path) -> None:
@@ -760,12 +839,13 @@ enabled = true
     assert seed_page.status_code == 200
     assert timeline_page.status_code == 200
     assert "Event Timeline" in timeline_page.text
-    assert "route.changed" in timeline_page.text or "route.removed" in timeline_page.text
+    assert (
+        "route.changed" in timeline_page.text or "route.removed" in timeline_page.text
+    )
     assert path_changes_page.status_code == 200
     assert "Path Changes" in path_changes_page.text
-    assert "Volatility Score" in path_changes_page.text
+    assert "Path-change score" in path_changes_page.text
     assert short_destination in path_changes_page.text
-
 
 
 def test_ui_rollout_remote_logs_and_upgrade_pages(tmp_path: Path) -> None:
@@ -776,7 +856,12 @@ def test_ui_rollout_remote_logs_and_upgrade_pages(tmp_path: Path) -> None:
     with TestClient(app) as client:
         client.post(
             "/fleet/groups?lang=en&token=ui-secret",
-            data={"action": "create_group", "name": "home-core", "description": "Home nodes", "group_type": "home"},
+            data={
+                "action": "create_group",
+                "name": "home-core",
+                "description": "Home nodes",
+                "group_type": "home",
+            },
         )
         client.post(
             "/fleet/nodes?lang=en&token=ui-secret",
@@ -805,26 +890,44 @@ def test_ui_rollout_remote_logs_and_upgrade_pages(tmp_path: Path) -> None:
         rollout_page = client.get("/rollout?lang=en&token=ui-secret")
         rollout_post = client.post(
             "/rollout?lang=en&token=ui-secret",
-            data={"action": "apply_template", "template_name": "home-default", "target_group": "home-core", "target_nodes": "relay-west"},
+            data={
+                "action": "apply_template",
+                "template_name": "home-default",
+                "target_group": "home-core",
+                "target_nodes": "relay-west",
+            },
         )
         upgrade_page = client.get("/upgrade?lang=en&token=ui-secret")
         upgrade_post = client.post(
             "/upgrade?lang=en&token=ui-secret",
-            data={"action": "upgrade", "target_version": "1.1.0", "channel": "beta", "enable_maintenance": "true"},
+            data={
+                "action": "upgrade",
+                "target_version": "1.1.0",
+                "channel": "beta",
+                "enable_maintenance": "true",
+            },
         )
         remote_logs_page = client.get("/remote-logs?lang=en&token=ui-secret")
 
     assert rollout_page.status_code == 200
-    assert "Batch Actions" in rollout_page.text
+    assert "Batch operations" in rollout_page.text
     assert rollout_post.status_code == 200
-    assert "Batch action recorded." in rollout_post.text
+    from html import unescape
+
+    assert (
+        "Batch operation recorded. Check each node's result for execution status."
+        in unescape(rollout_post.text)
+    )
     assert "home-default" in rollout_post.text
     assert upgrade_page.status_code == 200
-    assert "Schedule Operation" in upgrade_page.text
+    assert "Submit operation" in upgrade_page.text
     assert upgrade_post.status_code == 200
-    assert "Upgrade operation scheduled." in upgrade_post.text
+    assert (
+        "Upgrade request recorded. Check the operation result for its execution status."
+        in upgrade_post.text
+    )
     assert remote_logs_page.status_code == 200
-    assert "Remote Logs" in remote_logs_page.text
+    assert "Remote logs" in remote_logs_page.text
     assert "relay-west" in remote_logs_page.text
 
 
@@ -879,14 +982,31 @@ signature_required = true
                 "permissions": "read,operate,maintenance",
             },
         )
-        plugin_catalog_detail = client.get("/plugins/mesh_bridge?lang=en&token=ui-secret")
-        plugin_install = client.post("/plugins/mesh_bridge?lang=en&token=ui-secret", data={"action": "install", "enabled": "true"})
-        plugin_update = client.post("/plugins/mesh_bridge?lang=en&token=ui-secret", data={"action": "update"})
-        plugin_uninstall = client.post("/plugins/mesh_bridge?lang=en&token=ui-secret", data={"action": "uninstall"})
-        snapshot_post = client.post("/backup?lang=en&token=ui-secret", data={"action": "snapshot"})
-        prune_post = client.post("/backup?lang=en&token=ui-secret", data={"action": "prune", "keep": "1", "max_age_days": "30"})
+        plugin_catalog_detail = client.get(
+            "/plugins/mesh_bridge?lang=en&token=ui-secret"
+        )
+        plugin_install = client.post(
+            "/plugins/mesh_bridge?lang=en&token=ui-secret",
+            data={"action": "install", "enabled": "true"},
+        )
+        plugin_update = client.post(
+            "/plugins/mesh_bridge?lang=en&token=ui-secret", data={"action": "update"}
+        )
+        plugin_uninstall = client.post(
+            "/plugins/mesh_bridge?lang=en&token=ui-secret", data={"action": "uninstall"}
+        )
+        snapshot_post = client.post(
+            "/backup?lang=en&token=ui-secret", data={"action": "snapshot"}
+        )
+        prune_post = client.post(
+            "/backup?lang=en&token=ui-secret",
+            data={"action": "prune", "keep": "1", "max_age_days": "30"},
+        )
         backup_page = client.get("/backup?lang=en&token=ui-secret")
-        remote_logs_sync = client.post("/remote-logs?lang=en&token=ui-secret", data={"action": "sync", "limit": "20"})
+        remote_logs_sync = client.post(
+            "/remote-logs?lang=en&token=ui-secret",
+            data={"action": "sync", "limit": "20"},
+        )
         remote_logs_page = client.get("/remote-logs?lang=en&token=ui-secret")
 
     assert role_post.status_code == 200
@@ -894,7 +1014,7 @@ signature_required = true
     assert "field_ops" in role_post.text
     assert plugin_catalog_detail.status_code == 200
     assert "Install" in plugin_catalog_detail.text
-    assert "Resolved Install Plan" in plugin_catalog_detail.text
+    assert "Installation plan and resolved dependencies" in plugin_catalog_detail.text
     assert plugin_install.status_code == 200
     assert "Plugin installed." in plugin_install.text
     assert plugin_update.status_code == 200
@@ -906,9 +1026,9 @@ signature_required = true
     assert prune_post.status_code == 200
     assert "Snapshots pruned." in prune_post.text
     assert backup_page.status_code == 200
-    assert "Disaster Recovery Helper" in backup_page.text
+    assert "Recovery guide" in backup_page.text
     assert remote_logs_sync.status_code == 200
     assert "Remote log sync completed." in remote_logs_sync.text
     assert remote_logs_page.status_code == 200
-    assert "Sync Remote Nodes" in remote_logs_page.text
+    assert "Collect logs from remote nodes" in remote_logs_page.text
     assert "remote-east" in remote_logs_page.text

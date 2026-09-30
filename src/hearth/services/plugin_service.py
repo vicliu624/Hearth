@@ -120,14 +120,20 @@ class PluginService:
             return {"plugins": {}, "history": []}
         if not isinstance(payload, dict):
             return {"plugins": {}, "history": []}
-        plugins = payload.get("plugins") if isinstance(payload.get("plugins"), dict) else {}
-        history = payload.get("history") if isinstance(payload.get("history"), list) else []
+        plugins = (
+            payload.get("plugins") if isinstance(payload.get("plugins"), dict) else {}
+        )
+        history = (
+            payload.get("history") if isinstance(payload.get("history"), list) else []
+        )
         return {"plugins": plugins, "history": history}
 
     def _save_plugin_state(self, payload: dict[str, Any]) -> None:
         path = self._plugin_state_path()
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
     def _record_plugin_operation(
         self,
@@ -157,7 +163,9 @@ class PluginService:
             return None
         if text.startswith("sha256:"):
             text = text.split(":", 1)[1].strip()
-        if len(text) != 64 or any(character not in "0123456789abcdef" for character in text):
+        if len(text) != 64 or any(
+            character not in "0123456789abcdef" for character in text
+        ):
             return None
         return text
 
@@ -169,7 +177,9 @@ class PluginService:
         if lowered.startswith("ed25519:"):
             text = text.split(":", 1)[1].strip()
         normalized_hex = text.lower()
-        if len(normalized_hex) == expected_size * 2 and all(character in "0123456789abcdef" for character in normalized_hex):
+        if len(normalized_hex) == expected_size * 2 and all(
+            character in "0123456789abcdef" for character in normalized_hex
+        ):
             return normalized_hex
         padded = text + ("=" * (-len(text) % 4))
         try:
@@ -206,10 +216,20 @@ class PluginService:
                 raw_value = suffix.strip()
         if algorithm == "sha256":
             normalized_digest = self._normalize_digest(raw_value)
-            return ("sha256", f"sha256:{normalized_digest}") if normalized_digest else (None, None)
+            return (
+                ("sha256", f"sha256:{normalized_digest}")
+                if normalized_digest
+                else (None, None)
+            )
         if algorithm == "ed25519":
-            normalized_signature = self._normalize_ed25519_token(raw_value, expected_size=64)
-            return ("ed25519", f"ed25519:{normalized_signature}") if normalized_signature else (None, None)
+            normalized_signature = self._normalize_ed25519_token(
+                raw_value, expected_size=64
+            )
+            return (
+                ("ed25519", f"ed25519:{normalized_signature}")
+                if normalized_signature
+                else (None, None)
+            )
         normalized_digest = self._normalize_digest(text)
         if normalized_digest is not None:
             return "sha256", f"sha256:{normalized_digest}"
@@ -231,7 +251,9 @@ class PluginService:
                 "index_url": payload["index_url"],
                 "available_plugins": list(payload.get("available_plugins") or []),
                 "trusted_source": name in TRUSTED_PLUGIN_SOURCES,
-                "signature_status": "trusted" if name in TRUSTED_PLUGIN_SOURCES else "not_required",
+                "signature_status": "trusted"
+                if name in TRUSTED_PLUGIN_SOURCES
+                else "not_required",
                 "last_sync_at": None,
                 "sync_state": "idle",
                 "sync_error": None,
@@ -255,7 +277,9 @@ class PluginService:
             configured_signature = self._signature_value(source.signature)
             expected_sha256 = self._normalize_digest(source.expected_sha256)
             public_key = self._public_key_value(source.public_key)
-            signature_algorithm = self._signature_algorithm_value(source.signature_algorithm)
+            signature_algorithm = self._signature_algorithm_value(
+                source.signature_algorithm
+            )
             if signature_algorithm is None and configured_signature is not None:
                 signature_algorithm = configured_signature.split(":", 1)[0]
             if signature_algorithm is None and public_key is not None:
@@ -263,7 +287,10 @@ class PluginService:
             signature_required = bool(source.signature_required)
             entries[source_name] = {
                 "source": source_name,
-                "label": str(source.label or source_name.replace("_", " ").replace("-", " ").title()),
+                "label": str(
+                    source.label
+                    or source_name.replace("_", " ").replace("-", " ").title()
+                ),
                 "description": str(source.description or "Configured plugin source"),
                 "index_url": str(source.index_url).strip(),
                 "trusted_source": trusted_source,
@@ -322,7 +349,9 @@ class PluginService:
             }
             for item in sources
         ]
-        index_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        index_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
     def _extract_available_plugins(self, payload: dict[str, Any]) -> list[str]:
         available_plugins = [
@@ -358,7 +387,13 @@ class PluginService:
             raw_path = urllib_request.url2pathname(parsed.path or parsed.netloc)
             if parsed.netloc and parsed.path and not raw_path:
                 raw_path = urllib_request.url2pathname(f"{parsed.netloc}{parsed.path}")
-            if parsed.netloc and parsed.path and len(raw_path) >= 3 and raw_path.startswith("/") and raw_path[2:3] == ":":
+            if (
+                parsed.netloc
+                and parsed.path
+                and len(raw_path) >= 3
+                and raw_path.startswith("/")
+                and raw_path[2:3] == ":"
+            ):
                 raw_path = raw_path[1:]
             candidate = Path(raw_path)
         else:
@@ -371,12 +406,17 @@ class PluginService:
         parsed = urlparse(index_url)
         scheme = parsed.scheme.lower()
         if scheme in {"", "file"}:
-            if scheme == "file" and f"{parsed.netloc}{parsed.path}".strip("/").lower() == "local-config":
+            if (
+                scheme == "file"
+                and f"{parsed.netloc}{parsed.path}".strip("/").lower() == "local-config"
+            ):
                 return b"{}"
             manifest_path = self._resolve_source_file(index_url)
             return manifest_path.read_bytes()
         if scheme in {"http", "https"}:
-            request = urllib_request.Request(index_url, headers={"User-Agent": "Hearth/1.x"})
+            request = urllib_request.Request(
+                index_url, headers={"User-Agent": "Hearth/1.x"}
+            )
             with urllib_request.urlopen(request, timeout=5) as response:
                 return response.read()
         return b"{}"
@@ -390,7 +430,9 @@ class PluginService:
     def _canonical_manifest_bytes(self, payload: dict[str, Any]) -> bytes:
         manifest_payload = dict(payload)
         manifest_payload.pop("signature", None)
-        return json.dumps(manifest_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return json.dumps(
+            manifest_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
 
     def _manifest_sha256(self, payload: dict[str, Any]) -> str:
         return hashlib.sha256(self._canonical_manifest_bytes(payload)).hexdigest()
@@ -402,11 +444,15 @@ class PluginService:
         *,
         source_name: str,
     ) -> tuple[bool, str, str | None, str | None]:
-        trusted_source = bool(row.get("trusted_source")) or source_name in TRUSTED_PLUGIN_SOURCES
+        trusted_source = (
+            bool(row.get("trusted_source")) or source_name in TRUSTED_PLUGIN_SOURCES
+        )
         expected_sha256 = self._normalize_digest(row.get("expected_sha256"))
         configured_public_key = self._public_key_value(row.get("public_key"))
         configured_signature = self._signature_value(row.get("signature"))
-        configured_algorithm = self._signature_algorithm_value(row.get("signature_algorithm"))
+        configured_algorithm = self._signature_algorithm_value(
+            row.get("signature_algorithm")
+        )
         signature_required = bool(row.get("signature_required"))
 
         if manifest is None:
@@ -417,7 +463,9 @@ class PluginService:
         manifest_sha256 = self._manifest_sha256(manifest)
         manifest_public_key = self._public_key_value(manifest.get("public_key"))
         manifest_signature = self._signature_value(manifest.get("signature"))
-        manifest_algorithm = self._signature_algorithm_value(manifest.get("signature_algorithm"))
+        manifest_algorithm = self._signature_algorithm_value(
+            manifest.get("signature_algorithm")
+        )
         signature_token = configured_signature or manifest_signature
         signature_algorithm = configured_algorithm or manifest_algorithm
         if signature_algorithm is None and signature_token is not None:
@@ -428,22 +476,47 @@ class PluginService:
         if expected_sha256 and manifest_sha256 != expected_sha256:
             return False, "invalid", manifest_sha256, "manifest digest mismatch"
 
-        if configured_public_key and manifest_public_key and configured_public_key != manifest_public_key:
+        if (
+            configured_public_key
+            and manifest_public_key
+            and configured_public_key != manifest_public_key
+        ):
             return False, "invalid", manifest_sha256, "manifest public key mismatch"
 
         if signature_token:
             if signature_algorithm == "ed25519":
-                public_key_token = configured_public_key or (manifest_public_key if trusted_source else None)
+                public_key_token = configured_public_key or (
+                    manifest_public_key if trusted_source else None
+                )
                 if public_key_token is None:
-                    return False, "invalid", manifest_sha256, "configured public key missing"
+                    return (
+                        False,
+                        "invalid",
+                        manifest_sha256,
+                        "configured public key missing",
+                    )
                 public_key_bytes = bytes.fromhex(public_key_token.split(":", 1)[1])
                 signature_bytes = bytes.fromhex(signature_token.split(":", 1)[1])
-                if not verify_ed25519(public_key_bytes, self._canonical_manifest_bytes(manifest), signature_bytes):
-                    return False, "invalid", manifest_sha256, "manifest signature invalid"
+                if not verify_ed25519(
+                    public_key_bytes,
+                    self._canonical_manifest_bytes(manifest),
+                    signature_bytes,
+                ):
+                    return (
+                        False,
+                        "invalid",
+                        manifest_sha256,
+                        "manifest signature invalid",
+                    )
                 return True, "verified", manifest_sha256, None
             if signature_algorithm == "sha256":
                 if self._normalize_digest(signature_token) != manifest_sha256:
-                    return False, "invalid", manifest_sha256, "manifest signature invalid"
+                    return (
+                        False,
+                        "invalid",
+                        manifest_sha256,
+                        "manifest signature invalid",
+                    )
                 return True, "verified", manifest_sha256, None
             return False, "invalid", manifest_sha256, "unsupported signature algorithm"
 
@@ -458,7 +531,13 @@ class PluginService:
 
         return False, "not_required", manifest_sha256, None
 
-    def _refresh_source_entry(self, source_name: str, cached_row: dict[str, Any], live_row: dict[str, Any], refreshed_at: str) -> dict[str, Any]:
+    def _refresh_source_entry(
+        self,
+        source_name: str,
+        cached_row: dict[str, Any],
+        live_row: dict[str, Any],
+        refreshed_at: str,
+    ) -> dict[str, Any]:
         row = dict(cached_row)
         index_url = str(row.get("index_url") or f"hearth://{source_name}")
         available_plugins = [
@@ -478,17 +557,32 @@ class PluginService:
                     row["description"] = str(manifest.get("description"))
                 manifest_signature = self._signature_value(manifest.get("signature"))
                 manifest_public_key = self._public_key_value(manifest.get("public_key"))
-                manifest_algorithm = self._signature_algorithm_value(manifest.get("signature_algorithm"))
-                if manifest_signature and not self._signature_value(row.get("signature")):
+                manifest_algorithm = self._signature_algorithm_value(
+                    manifest.get("signature_algorithm")
+                )
+                if manifest_signature and not self._signature_value(
+                    row.get("signature")
+                ):
                     row["signature"] = manifest_signature
-                if manifest_public_key and not self._public_key_value(row.get("public_key")):
+                if manifest_public_key and not self._public_key_value(
+                    row.get("public_key")
+                ):
                     row["public_key"] = manifest_public_key
-                effective_algorithm = self._signature_algorithm_value(row.get("signature_algorithm")) or manifest_algorithm
+                effective_algorithm = (
+                    self._signature_algorithm_value(row.get("signature_algorithm"))
+                    or manifest_algorithm
+                )
                 if effective_algorithm is None:
-                    signature_value = self._signature_value(row.get("signature")) or manifest_signature
+                    signature_value = (
+                        self._signature_value(row.get("signature"))
+                        or manifest_signature
+                    )
                     if signature_value is not None:
                         effective_algorithm = signature_value.split(":", 1)[0]
-                    elif self._public_key_value(row.get("public_key")) or manifest_public_key:
+                    elif (
+                        self._public_key_value(row.get("public_key"))
+                        or manifest_public_key
+                    ):
                         effective_algorithm = "ed25519"
                 row["signature_algorithm"] = effective_algorithm
                 manifest_plugins = self._extract_available_plugins(manifest)
@@ -506,13 +600,19 @@ class PluginService:
                 row["available_plugins"] = sorted(set(available_plugins))
                 return row
 
-        trusted_source, signature_status, manifest_sha256, trust_error = self._evaluate_source_trust(
-            row,
-            manifest,
-            source_name=source_name,
+        trusted_source, signature_status, manifest_sha256, trust_error = (
+            self._evaluate_source_trust(
+                row,
+                manifest,
+                source_name=source_name,
+            )
         )
         row["trusted_source"] = trusted_source
-        row["signature_status"] = signature_status if signature_status in SOURCE_SIGNATURE_STATES else "not_required"
+        row["signature_status"] = (
+            signature_status
+            if signature_status in SOURCE_SIGNATURE_STATES
+            else "not_required"
+        )
         row["manifest_sha256"] = manifest_sha256
         row["sync_error"] = trust_error
         row["last_sync_at"] = refreshed_at
@@ -522,7 +622,9 @@ class PluginService:
         row["available_plugins"] = sorted(set(available_plugins))
 
         has_content = trusted_source or live_row["plugin_count"] or available_plugins
-        row["sync_state"] = "error" if trust_error else ("ready" if has_content else "idle")
+        row["sync_state"] = (
+            "error" if trust_error else ("ready" if has_content else "idle")
+        )
         return row
 
     def _merge_source_entries(self, *, mark_refreshed: bool) -> list[dict[str, Any]]:
@@ -548,9 +650,15 @@ class PluginService:
         rows: list[dict[str, Any]] = []
         for source_name in source_names:
             cached_row = dict(cached.get(source_name) or {"source": source_name})
-            live_row = grouped.get(source_name) or {"plugin_count": 0, "enabled_count": 0, "plugins": []}
+            live_row = grouped.get(source_name) or {
+                "plugin_count": 0,
+                "enabled_count": 0,
+                "plugins": [],
+            }
             if mark_refreshed and refreshed_at is not None:
-                cached_row = self._refresh_source_entry(source_name, cached_row, live_row, refreshed_at)
+                cached_row = self._refresh_source_entry(
+                    source_name, cached_row, live_row, refreshed_at
+                )
 
             available_plugins = [
                 str(item).strip()
@@ -560,11 +668,28 @@ class PluginService:
             if not available_plugins and live_row["plugins"]:
                 available_plugins = list(live_row["plugins"])
 
-            trusted_source = bool(cached_row.get("trusted_source")) or source_name in TRUSTED_PLUGIN_SOURCES
-            sync_state = str(cached_row.get("sync_state") or ("ready" if live_row["plugin_count"] else "idle")).strip().lower()
+            trusted_source = (
+                bool(cached_row.get("trusted_source"))
+                or source_name in TRUSTED_PLUGIN_SOURCES
+            )
+            sync_state = (
+                str(
+                    cached_row.get("sync_state")
+                    or ("ready" if live_row["plugin_count"] else "idle")
+                )
+                .strip()
+                .lower()
+            )
             if sync_state not in SOURCE_SYNC_STATES:
                 sync_state = "ready" if live_row["plugin_count"] else "idle"
-            signature_status = str(cached_row.get("signature_status") or ("trusted" if trusted_source else "not_required")).strip().lower()
+            signature_status = (
+                str(
+                    cached_row.get("signature_status")
+                    or ("trusted" if trusted_source else "not_required")
+                )
+                .strip()
+                .lower()
+            )
             if signature_status not in SOURCE_SIGNATURE_STATES:
                 signature_status = "trusted" if trusted_source else "not_required"
 
@@ -572,8 +697,12 @@ class PluginService:
                 {
                     "source": source_name,
                     "label": str(cached_row.get("label") or source_name.title()),
-                    "description": str(cached_row.get("description") or "Plugin source index"),
-                    "index_url": str(cached_row.get("index_url") or f"hearth://{source_name}"),
+                    "description": str(
+                        cached_row.get("description") or "Plugin source index"
+                    ),
+                    "index_url": str(
+                        cached_row.get("index_url") or f"hearth://{source_name}"
+                    ),
                     "trusted_source": trusted_source,
                     "signature_status": signature_status,
                     "sync_state": sync_state,
@@ -584,29 +713,46 @@ class PluginService:
                     "available_count": len(sorted(set(available_plugins))),
                     "last_sync_at": cached_row.get("last_sync_at"),
                     "sync_error": cached_row.get("sync_error"),
-                    "expected_sha256": self._normalize_digest(cached_row.get("expected_sha256")),
+                    "expected_sha256": self._normalize_digest(
+                        cached_row.get("expected_sha256")
+                    ),
                     "public_key": self._public_key_value(cached_row.get("public_key")),
                     "signature": self._signature_value(cached_row.get("signature")),
-                    "signature_algorithm": self._signature_algorithm_value(cached_row.get("signature_algorithm")),
+                    "signature_algorithm": self._signature_algorithm_value(
+                        cached_row.get("signature_algorithm")
+                    ),
                     "signature_required": bool(cached_row.get("signature_required")),
-                    "manifest_sha256": self._normalize_digest(cached_row.get("manifest_sha256")),
+                    "manifest_sha256": self._normalize_digest(
+                        cached_row.get("manifest_sha256")
+                    ),
                 }
             )
-        return sorted(rows, key=lambda item: (not item["trusted_source"], item["source"]))
+        return sorted(
+            rows, key=lambda item: (not item["trusted_source"], item["source"])
+        )
 
     def _default_manifest_plugins(self, source_name: str) -> list[dict[str, Any]]:
-        return [dict(item, source=source_name) for item in DEFAULT_PLUGIN_MANIFESTS.get(source_name, [])]
+        return [
+            dict(item, source=source_name)
+            for item in DEFAULT_PLUGIN_MANIFESTS.get(source_name, [])
+        ]
 
-    def _load_source_manifest_plugins(self, source_row: dict[str, Any]) -> list[dict[str, Any]]:
+    def _load_source_manifest_plugins(
+        self, source_row: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         source_name = str(source_row.get("source") or "").strip()
         index_url = str(source_row.get("index_url") or "").strip()
         if not index_url or not self._is_fetchable_source(index_url):
             return self._default_manifest_plugins(source_name)
         try:
-            manifest = self._parse_source_manifest(self._load_source_document(index_url))
+            manifest = self._parse_source_manifest(
+                self._load_source_document(index_url)
+            )
         except Exception:
             return self._default_manifest_plugins(source_name)
-        plugins = manifest.get("plugins") if isinstance(manifest.get("plugins"), list) else []
+        plugins = (
+            manifest.get("plugins") if isinstance(manifest.get("plugins"), list) else []
+        )
         rows: list[dict[str, Any]] = []
         for item in plugins:
             if isinstance(item, dict):
@@ -620,8 +766,14 @@ class PluginService:
             rows.append(row)
         return rows or self._default_manifest_plugins(source_name)
 
-    def _available_catalog(self, *, refresh_sources: bool = False) -> list[dict[str, Any]]:
-        sources = self.refresh_sources()["sources"] if refresh_sources else self.list_sources()
+    def _available_catalog(
+        self, *, refresh_sources: bool = False
+    ) -> list[dict[str, Any]]:
+        sources = (
+            self.refresh_sources()["sources"]
+            if refresh_sources
+            else self.list_sources()
+        )
         rows: dict[str, dict[str, Any]] = {}
         for source in sources:
             for item in self._load_source_manifest_plugins(source):
@@ -641,7 +793,10 @@ class PluginService:
                 row["source_sync_state"] = source.get("sync_state")
                 row["signature_status"] = source.get("signature_status")
                 row["manifest_sha256"] = source.get("manifest_sha256")
-                row["installable"] = bool(source.get("trusted_source") or source.get("signature_status") in {"trusted", "verified"})
+                row["installable"] = bool(
+                    source.get("trusted_source")
+                    or source.get("signature_status") in {"trusted", "verified"}
+                )
                 rows[name] = row
         return sorted(rows.values(), key=lambda item: item["name"])
 
@@ -650,32 +805,57 @@ class PluginService:
 
     def _sandbox_boundary(self, payload: dict[str, Any]) -> dict[str, Any]:
         name = str(payload.get("name") or "unknown-plugin")
-        permissions = sorted({str(item).strip().lower() for item in payload.get("permissions") or [] if str(item).strip()})
-        elevated = any(permission in {"operate", "configure", "maintenance", "security", "tokens"} for permission in permissions)
+        permissions = sorted(
+            {
+                str(item).strip().lower()
+                for item in payload.get("permissions") or []
+                if str(item).strip()
+            }
+        )
+        elevated = any(
+            permission in {"operate", "configure", "maintenance", "security", "tokens"}
+            for permission in permissions
+        )
         root = self.settings.plugin_runtime_dir / name
         return {
             "mode": "elevated" if elevated else "restricted",
-            "network_access": bool(payload.get("type") in {"bridge", "service"} or elevated),
+            "network_access": bool(
+                payload.get("type") in {"bridge", "service"} or elevated
+            ),
             "filesystem_roots": [str(root)],
             "permissions": permissions,
             "writable_state_dir": str(root),
         }
 
     def _plugin_config_payload(self) -> dict[str, Any]:
-        return self.settings.model_dump(mode="json", exclude={"config_path"}, exclude_none=True)
+        return self.settings.model_dump(
+            mode="json", exclude={"config_path"}, exclude_none=True
+        )
 
     def _normalize_plugin(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload)
         source = str(normalized.get("source") or "local").strip() or "local"
         enabled = bool(normalized.get("enabled", False))
-        permissions = [str(item).strip() for item in (normalized.get("permissions") or []) if str(item).strip()]
-        depends_on = [str(item).strip() for item in (normalized.get("depends_on") or []) if str(item).strip()]
+        permissions = [
+            str(item).strip()
+            for item in (normalized.get("permissions") or [])
+            if str(item).strip()
+        ]
+        depends_on = [
+            str(item).strip()
+            for item in (normalized.get("depends_on") or [])
+            if str(item).strip()
+        ]
         config = normalized.get("config") or {}
         if not isinstance(config, dict):
             config = {"value": config}
 
         trusted_source = source in TRUSTED_PLUGIN_SOURCES
-        sync_state = str(normalized.get("sync_state") or ("ready" if enabled else "idle")).strip().lower()
+        sync_state = (
+            str(normalized.get("sync_state") or ("ready" if enabled else "idle"))
+            .strip()
+            .lower()
+        )
         if sync_state not in SOURCE_SYNC_STATES - {"error"}:
             sync_state = "ready" if enabled else "idle"
 
@@ -703,11 +883,17 @@ class PluginService:
 
     def list_plugins(self) -> list[dict[str, Any]]:
         state = self._load_plugin_state()
-        installed_rows = state.get("plugins") if isinstance(state.get("plugins"), dict) else {}
+        installed_rows = (
+            state.get("plugins") if isinstance(state.get("plugins"), dict) else {}
+        )
         plugins: list[dict[str, Any]] = []
         for plugin in self.settings.plugins:
             normalized = self._normalize_plugin(plugin.model_dump(mode="json"))
-            runtime_row = installed_rows.get(normalized["name"]) if isinstance(installed_rows, dict) else None
+            runtime_row = (
+                installed_rows.get(normalized["name"])
+                if isinstance(installed_rows, dict)
+                else None
+            )
             if isinstance(runtime_row, dict):
                 normalized["install_state"] = {
                     "installed_at": runtime_row.get("installed_at"),
@@ -715,7 +901,9 @@ class PluginService:
                     "status": runtime_row.get("status") or "installed",
                     "operation": runtime_row.get("operation"),
                 }
-                normalized["sandbox_boundary"] = runtime_row.get("sandbox_boundary") or normalized.get("sandbox_boundary")
+                normalized["sandbox_boundary"] = runtime_row.get(
+                    "sandbox_boundary"
+                ) or normalized.get("sandbox_boundary")
             else:
                 normalized["install_state"] = None
             plugins.append(normalized)
@@ -736,10 +924,14 @@ class PluginService:
         }
 
     def get_source(self, name: str) -> dict[str, Any] | None:
-        return next((item for item in self.list_sources() if item["source"] == name), None)
+        return next(
+            (item for item in self.list_sources() if item["source"] == name), None
+        )
 
     def get_plugin(self, name: str) -> dict[str, Any] | None:
-        return next((item for item in self.list_plugins() if item["name"] == name), None)
+        return next(
+            (item for item in self.list_plugins() if item["name"] == name), None
+        )
 
     def set_plugin_enabled(self, name: str, enabled: bool) -> dict[str, Any]:
         payload = self._plugin_config_payload()
@@ -751,7 +943,7 @@ class PluginService:
                 updated.setdefault("sandbox_boundary", self._sandbox_boundary(updated))
                 plugins[index] = updated
                 payload["plugins"] = plugins
-                self.config_service.save(payload)
+                self.config_service.save_live_section("plugins", payload["plugins"])
                 state = self._load_plugin_state()
                 plugin_state = dict((state.get("plugins") or {}).get(name) or {})
                 plugin_state.update(
@@ -759,7 +951,8 @@ class PluginService:
                         "status": "enabled" if enabled else "disabled",
                         "operation": "toggle_enabled",
                         "updated_at": self._now_iso(),
-                        "sandbox_boundary": updated.get("sandbox_boundary") or self._sandbox_boundary(updated),
+                        "sandbox_boundary": updated.get("sandbox_boundary")
+                        or self._sandbox_boundary(updated),
                     }
                 )
                 state.setdefault("plugins", {})[name] = plugin_state
@@ -773,18 +966,25 @@ class PluginService:
                 return self._normalize_plugin(updated)
         raise LookupError("plugin not found")
 
-    def list_available_plugins(self, *, refresh_sources: bool = False) -> list[dict[str, Any]]:
+    def list_available_plugins(
+        self, *, refresh_sources: bool = False
+    ) -> list[dict[str, Any]]:
         installed = {item["name"] for item in self.list_plugins()}
         rows = []
         for item in self._available_catalog(refresh_sources=refresh_sources):
             row = dict(item)
             row["installed"] = row["name"] in installed
-            row["sandbox_boundary"] = row.get("sandbox_boundary") or self._sandbox_boundary(row)
+            row["sandbox_boundary"] = row.get(
+                "sandbox_boundary"
+            ) or self._sandbox_boundary(row)
             rows.append(row)
         return rows
 
     def get_available_plugin(self, name: str) -> dict[str, Any] | None:
-        return next((item for item in self.list_available_plugins() if item["name"] == name), None)
+        return next(
+            (item for item in self.list_available_plugins() if item["name"] == name),
+            None,
+        )
 
     def resolve_dependencies(self, name: str) -> list[dict[str, Any]]:
         catalog = {item["name"]: item for item in self.list_available_plugins()}
@@ -828,13 +1028,15 @@ class PluginService:
                 "permissions": entry.get("permissions") or [],
                 "depends_on": entry.get("depends_on") or [],
                 "config": entry.get("config") or {},
-                "sandbox_boundary": entry.get("sandbox_boundary") or self._sandbox_boundary(entry),
+                "sandbox_boundary": entry.get("sandbox_boundary")
+                or self._sandbox_boundary(entry),
             }
             if plugin_name not in installed_names:
                 plugins.append(plugin_payload)
                 installed_names.add(plugin_name)
             state_plugins[plugin_name] = {
-                "installed_at": state_plugins.get(plugin_name, {}).get("installed_at") or self._now_iso(),
+                "installed_at": state_plugins.get(plugin_name, {}).get("installed_at")
+                or self._now_iso(),
                 "updated_at": self._now_iso(),
                 "status": "installed",
                 "operation": "install",
@@ -845,13 +1047,16 @@ class PluginService:
             installed.append(plugin_payload)
 
         payload["plugins"] = plugins
-        result = self.config_service.save(payload)
+        result = self.config_service.save_live_section("plugins", payload["plugins"])
         if not result.get("saved"):
             raise ValueError("failed to save installed plugin configuration")
         state = self._record_plugin_operation(
             "install",
             plugin_name=name,
-            payload={"installed": [item["name"] for item in installed], "enable": enable},
+            payload={
+                "installed": [item["name"] for item in installed],
+                "enable": enable,
+            },
             state=state,
         )
         self._save_plugin_state(state)
@@ -862,7 +1067,9 @@ class PluginService:
             "dependency_count": max(len(installed) - 1, 0),
         }
 
-    def uninstall_plugin(self, name: str, *, remove_dependents: bool = False) -> dict[str, Any]:
+    def uninstall_plugin(
+        self, name: str, *, remove_dependents: bool = False
+    ) -> dict[str, Any]:
         payload = self._plugin_config_payload()
         plugins = list(payload.get("plugins") or [])
         installed_names = {str(item.get("name") or "") for item in plugins}
@@ -876,8 +1083,10 @@ class PluginService:
         if dependents and not remove_dependents:
             raise ValueError("plugin is still required by other installed plugins")
         removed_names = {name, *dependents} if remove_dependents else {name}
-        payload["plugins"] = [item for item in plugins if str(item.get("name") or "") not in removed_names]
-        result = self.config_service.save(payload)
+        payload["plugins"] = [
+            item for item in plugins if str(item.get("name") or "") not in removed_names
+        ]
+        result = self.config_service.save_live_section("plugins", payload["plugins"])
         if not result.get("saved"):
             raise ValueError("failed to save plugin removal")
         state = self._load_plugin_state()
@@ -887,7 +1096,10 @@ class PluginService:
         state = self._record_plugin_operation(
             "uninstall",
             plugin_name=name,
-            payload={"removed": sorted(removed_names), "remove_dependents": remove_dependents},
+            payload={
+                "removed": sorted(removed_names),
+                "remove_dependents": remove_dependents,
+            },
             state=state,
         )
         self._save_plugin_state(state)
@@ -907,11 +1119,18 @@ class PluginService:
             updated = {
                 **item,
                 "version": available.get("version") or item.get("version") or "0.1.0",
-                "description": available.get("description") or item.get("description") or "",
-                "permissions": available.get("permissions") or item.get("permissions") or [],
-                "depends_on": available.get("depends_on") or item.get("depends_on") or [],
+                "description": available.get("description")
+                or item.get("description")
+                or "",
+                "permissions": available.get("permissions")
+                or item.get("permissions")
+                or [],
+                "depends_on": available.get("depends_on")
+                or item.get("depends_on")
+                or [],
                 "config": available.get("config") or item.get("config") or {},
-                "sandbox_boundary": available.get("sandbox_boundary") or self._sandbox_boundary(available),
+                "sandbox_boundary": available.get("sandbox_boundary")
+                or self._sandbox_boundary(available),
             }
             if enable is not None:
                 updated["enabled"] = enable
@@ -921,7 +1140,7 @@ class PluginService:
         if updated_row is None:
             raise LookupError("plugin not installed")
         payload["plugins"] = plugins
-        result = self.config_service.save(payload)
+        result = self.config_service.save_live_section("plugins", payload["plugins"])
         if not result.get("saved"):
             raise ValueError("failed to save plugin update")
         state = self._load_plugin_state()

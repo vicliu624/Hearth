@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>{{ t("auth.page_forbidden") }}</h2>
+  <p>{{ t("auth.forbidden") }}</p>
+  <a class="button-link" href="/">{{ t("nav.dashboard") }}</a>
+  <a class="button-link" href="{{ login_href }}">{{ t("auth.use_another_token") }}</a>
+</section>
+{% endblock %}

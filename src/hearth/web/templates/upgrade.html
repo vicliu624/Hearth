@@ -13,13 +13,13 @@
 <section class="dashboard-grid">
   <section class="panel panel--wide">
     <div class="panel-header"><div><h2>{{ t("upgrade.schedule") }}</h2></div></div>
-    <p class="muted">Remote upgrades and rollbacks dispatch through each node's management `dashboard_url`; local upgrades execute with the current Python environment.</p>
+    <p class="muted">{{ t('upgrade.execution_hint') }}</p>
     <form method="post" action="{{ request.url.path }}">
       <div class="toolbar compact-toolbar">
         <label class="toolbar-field toolbar-field--small"><span>{{ t("rollout.action_type") }}</span>
           <select name="action">
-            <option value="upgrade">upgrade</option>
-            <option value="rollback">rollback</option>
+            <option value="upgrade">{{ tv("upgrade") }}</option>
+            <option value="rollback">{{ tv("rollback") }}</option>
           </select>
         </label>
         <label class="toolbar-field toolbar-field--small"><span>{{ t("upgrade.target_version") }}</span><input type="text" name="target_version" required></label>
@@ -54,7 +54,7 @@
 
 {% if result %}
 <section class="panel">
-  <div class="panel-header"><div><h2>Latest Result</h2></div></div>
+  <div class="panel-header"><div><h2>{{ t('section.latest_result') }}</h2></div></div>
   <pre>{{ result | tojson(indent=2) }}</pre>
 </section>
 {% endif %}

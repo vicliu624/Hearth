@@ -26,15 +26,39 @@ class HealthStatusEvaluator:
         except ValueError:
             return None
 
-    def evaluate(self, runtime_status: dict[str, Any], interfaces: list[dict[str, Any]]) -> HealthReport:
+    def evaluate(
+        self, runtime_status: dict[str, Any], interfaces: list[dict[str, Any]]
+    ) -> HealthReport:
         issues: list[str] = []
         if runtime_status["status"] in {"stopped", "crashed"}:
+            if runtime_status.get("desired_state") == "stopped":
+                return HealthReport(status="healthy", issues=[])
             issues.append("reticulum runtime is not running")
             return HealthReport(status="critical", issues=issues)
 
         if runtime_status["status"] == "starting":
             issues.append("reticulum runtime is still starting")
             return HealthReport(status="warning", issues=issues)
+
+        if any(
+            item.get("desired_state") == "stopped" and item.get("status") == "running"
+            for item in interfaces
+        ):
+            return HealthReport(
+                status="warning",
+                issues=["an interface is running despite a stopped desired state"],
+            )
+
+        observation_status = runtime_status.get("details", {}).get("observation_status")
+        if runtime_status.get("backend") != "mock_process" and observation_status in {
+            "unknown",
+            "unavailable",
+            "partial",
+        }:
+            return HealthReport(
+                status="warning",
+                issues=["runtime observation is unavailable or incomplete"],
+            )
 
         heartbeat_at = self._parse_datetime(runtime_status.get("last_heartbeat_at"))
         backend = runtime_status.get("backend")
@@ -47,13 +71,19 @@ class HealthStatusEvaluator:
         degraded_count = sum(
             1
             for item in interfaces
-            if item["enabled"] and (item["health_status"] in {"degraded", "critical"} or item["status"] == "error")
+            if item["enabled"]
+            and (
+                item["health_status"] in {"degraded", "critical"}
+                or item["status"] == "error"
+            )
         )
         warning_count = sum(
+            1 for item in interfaces if item["enabled"] and item["status"] == "stopped"
+        ) + sum(
             1
             for item in interfaces
-            if item["enabled"] and item["status"] == "stopped"
-        ) + sum(1 for item in interfaces if item["enabled"] and item["health_status"] == "warning")
+            if item["enabled"] and item["health_status"] == "warning"
+        )
 
         if degraded_count:
             issues.append("one or more interfaces are degraded")

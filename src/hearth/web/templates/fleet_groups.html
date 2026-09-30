@@ -5,7 +5,7 @@
   <div>
     <p class="page-kicker">{{ t("nav.fleet") }}</p>
     <h1>{{ t("page.fleet_groups") }}</h1>
-    <p class="page-subtitle">{{ page_total }} {{ t("fleet.groups_total") }}</p>
+    <p class="page-subtitle">{{ t("count.groups", count=page_total) }}</p>
   </div>
   <div class="inline-form">
     <a class="button-link" href="{{ fleet_href }}">{{ t("page.fleet") }}</a>
@@ -21,7 +21,7 @@
       <label class="toolbar-field"><span>{{ t("field.group") }}</span><input type="text" name="name" required></label>
       <label class="toolbar-field"><span>{{ t("field.description") }}</span><input type="text" name="description"></label>
       <label class="toolbar-field toolbar-field--small"><span>{{ t("fleet.group_type") }}</span>
-        <select name="group_type"><option value="home">home</option><option value="community">community</option><option value="relay">relay</option><option value="custom">custom</option></select>
+        <select name="group_type"><option value="home">{{ tv("home") }}</option><option value="community">{{ tv("community") }}</option><option value="relay">{{ tv("relay") }}</option><option value="custom">{{ tv("custom") }}</option></select>
       </label>
     </div>
     <div class="toolbar-group"><button type="submit">{{ t("fleet.create_group") }}</button></div>

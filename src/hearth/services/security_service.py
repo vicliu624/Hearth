@@ -16,7 +16,14 @@ BUILTIN_ROLE_DEFINITIONS: list[dict[str, Any]] = [
         "name": "owner",
         "label": "Owner",
         "description": "Full control over node, security, tokens, and maintenance.",
-        "permissions": ["read", "operate", "configure", "security", "tokens", "maintenance"],
+        "permissions": [
+            "read",
+            "operate",
+            "configure",
+            "security",
+            "tokens",
+            "maintenance",
+        ],
     },
     {
         "name": "admin",
@@ -49,11 +56,23 @@ MANAGEMENT_ROLES = {"owner", "admin", "operator", "service_manager"}
 USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]{3,48}$")
 TOKEN_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]{3,64}$")
 ROLE_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]{3,48}$")
-KNOWN_PERMISSIONS = {"read", "operate", "configure", "security", "tokens", "maintenance"}
+KNOWN_PERMISSIONS = {
+    "read",
+    "operate",
+    "configure",
+    "security",
+    "tokens",
+    "maintenance",
+}
 
 
 class SecurityService:
-    def __init__(self, settings: HearthSettings, database: Database, config_service: ConfigService | None = None) -> None:
+    def __init__(
+        self,
+        settings: HearthSettings,
+        database: Database,
+        config_service: ConfigService | None = None,
+    ) -> None:
         self.settings = settings
         self.database = database
         self.config_service = config_service
@@ -72,7 +91,13 @@ class SecurityService:
             name = str(payload.get("name") or "").strip().lower().replace(" ", "_")
             if not name or name in ROLE_INDEX:
                 continue
-            permissions = sorted({permission.strip().lower() for permission in payload.get("permissions") or [] if permission.strip()})
+            permissions = sorted(
+                {
+                    permission.strip().lower()
+                    for permission in payload.get("permissions") or []
+                    if permission.strip()
+                }
+            )
             rows.append(
                 {
                     "name": name,
@@ -89,23 +114,44 @@ class SecurityService:
         return {item["name"]: item for item in self._role_definitions()}
 
     def _normalize_permissions(self, permissions: list[str] | None) -> list[str]:
-        normalized = sorted({str(permission).strip().lower() for permission in permissions or [] if str(permission).strip()})
-        invalid = [permission for permission in normalized if permission not in KNOWN_PERMISSIONS]
+        normalized = sorted(
+            {
+                str(permission).strip().lower()
+                for permission in permissions or []
+                if str(permission).strip()
+            }
+        )
+        invalid = [
+            permission
+            for permission in normalized
+            if permission not in KNOWN_PERMISSIONS
+        ]
         if invalid:
             raise ValueError(f"unknown permissions: {', '.join(invalid)}")
         if not normalized:
             raise ValueError("at least one permission is required")
         return normalized
 
-    def _save_custom_roles(self, roles: list[dict[str, Any]], *, source: str, summary: str, payload: dict[str, Any]) -> None:
+    def _save_custom_roles(
+        self,
+        roles: list[dict[str, Any]],
+        *,
+        source: str,
+        summary: str,
+        payload: dict[str, Any],
+    ) -> None:
         if self.config_service is None:
             raise ValueError("config service is not available for role management")
-        settings_payload = self.settings.model_dump(mode="json", exclude={"config_path"}, exclude_none=True)
+        settings_payload = self.settings.model_dump(
+            mode="json", exclude={"config_path"}, exclude_none=True
+        )
         settings_payload["roles"] = roles
-        result = self.config_service.save(settings_payload)
+        result = self.config_service.save_live_section("roles", roles)
         if not result.get("saved"):
             raise ValueError("failed to save role configuration")
-        self.database.record_event(source, summary, source="security_service", payload=payload)
+        self.database.record_event(
+            source, summary, source="security_service", payload=payload
+        )
 
     def normalize_role(self, value: str | None) -> str:
         role = (value or "viewer").strip().lower().replace(" ", "_")
@@ -113,7 +159,9 @@ class SecurityService:
 
     def role_permissions(self, role: str | None) -> set[str]:
         normalized_role = self.normalize_role(role)
-        definition = self._role_index().get(normalized_role, self._role_index()["viewer"])
+        definition = self._role_index().get(
+            normalized_role, self._role_index()["viewer"]
+        )
         return set(definition.get("permissions", []))
 
     def list_roles(self) -> list[dict[str, Any]]:
@@ -132,8 +180,12 @@ class SecurityService:
     ) -> dict[str, Any]:
         candidate = str(name or "").strip().lower().replace(" ", "_")
         if not ROLE_NAME_PATTERN.match(candidate):
-            raise ValueError("role name must be 3-48 chars using letters, numbers, dot, dash, or underscore")
-        if candidate in ROLE_INDEX or candidate in {role["name"] for role in self.list_roles()}:
+            raise ValueError(
+                "role name must be 3-48 chars using letters, numbers, dot, dash, or underscore"
+            )
+        if candidate in ROLE_INDEX or candidate in {
+            role["name"] for role in self.list_roles()
+        }:
             raise ValueError("role already exists")
         role = {
             "name": candidate,
@@ -172,7 +224,9 @@ class SecurityService:
             if candidate != normalized_name:
                 continue
             if label is not None:
-                item["label"] = label.strip() or normalized_name.replace("_", " ").title()
+                item["label"] = (
+                    label.strip() or normalized_name.replace("_", " ").title()
+                )
             if description is not None:
                 item["description"] = description.strip()
             if permissions is not None:
@@ -200,13 +254,20 @@ class SecurityService:
         remaining = [
             item
             for item in custom_roles
-            if str(item.get("name") or "").strip().lower().replace(" ", "_") != normalized_name
+            if str(item.get("name") or "").strip().lower().replace(" ", "_")
+            != normalized_name
         ]
         if len(remaining) == len(custom_roles):
             raise ValueError("role not found")
-        in_use = [user["username"] for user in self.list_users() if str(user.get("role") or "viewer") == normalized_name]
+        in_use = [
+            user["username"]
+            for user in self.list_users()
+            if str(user.get("role") or "viewer") == normalized_name
+        ]
         in_use.extend(
-            token["token_name"] for token in self.list_api_tokens() if str(token.get("role") or "viewer") == normalized_name
+            token["token_name"]
+            for token in self.list_api_tokens()
+            if str(token.get("role") or "viewer") == normalized_name
         )
         if in_use:
             raise ValueError("role is still in use by users or tokens")
@@ -245,19 +306,26 @@ class SecurityService:
 
     def get_user(self, username: str) -> dict[str, Any] | None:
         if username == "admin":
-            return next((item for item in self.list_users() if item["username"] == "admin"), None)
+            return next(
+                (item for item in self.list_users() if item["username"] == "admin"),
+                None,
+            )
         user = self.database.get_user(username)
         if user is None:
             return None
         user["builtin"] = False
         return user
 
-    def create_user(self, *, username: str, display_name: str | None = None, role: str = "viewer") -> dict[str, Any]:
+    def create_user(
+        self, *, username: str, display_name: str | None = None, role: str = "viewer"
+    ) -> dict[str, Any]:
         candidate = username.strip()
         if candidate == "admin":
             raise ValueError("admin is reserved")
         if not USERNAME_PATTERN.match(candidate):
-            raise ValueError("username must be 3-48 chars using letters, numbers, dot, dash, or underscore")
+            raise ValueError(
+                "username must be 3-48 chars using letters, numbers, dot, dash, or underscore"
+            )
         user = self.database.upsert_user(
             username=candidate,
             display_name=(display_name or "").strip() or None,
@@ -339,7 +407,9 @@ class SecurityService:
     ) -> dict[str, Any]:
         candidate = token_name.strip()
         if not TOKEN_NAME_PATTERN.match(candidate):
-            raise ValueError("token name must be 3-64 chars using letters, numbers, dot, dash, or underscore")
+            raise ValueError(
+                "token name must be 3-64 chars using letters, numbers, dot, dash, or underscore"
+            )
         owner = (owner_username or "").strip() or None
         if owner and owner != "admin" and self.database.get_user(owner) is None:
             raise ValueError("owner user not found")
@@ -365,7 +435,11 @@ class SecurityService:
             "security.token_created",
             f"api token {candidate} created",
             source="security_service",
-            payload={"token_name": candidate, "owner_username": owner, "role": normalized_role},
+            payload={
+                "token_name": candidate,
+                "owner_username": owner,
+                "role": normalized_role,
+            },
         )
         return token
 
@@ -427,16 +501,25 @@ class SecurityService:
             "token_name": stored["token_name"],
         }
 
-    def principal_has_permission(self, principal: dict[str, Any] | None, permission: str) -> bool:
+    def principal_has_permission(
+        self, principal: dict[str, Any] | None, permission: str
+    ) -> bool:
         if not principal:
             return False
 
         normalized_permission = (permission or "read").strip().lower()
         role_permissions = self.role_permissions(str(principal.get("role") or "viewer"))
-        if "*" not in role_permissions and normalized_permission not in role_permissions:
+        if (
+            "*" not in role_permissions
+            and normalized_permission not in role_permissions
+        ):
             return False
 
-        scopes = [str(scope).strip().lower() for scope in principal.get("scopes") or [] if str(scope).strip()]
+        scopes = [
+            str(scope).strip().lower()
+            for scope in principal.get("scopes") or []
+            if str(scope).strip()
+        ]
         if not scopes or "*" in scopes:
             return True
         return normalized_permission in scopes

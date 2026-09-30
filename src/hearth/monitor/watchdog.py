@@ -43,7 +43,9 @@ class WatchdogService:
         if self.maintenance_service.is_enabled():
             return
 
-        summary = await self.node_service.status_summary(persist=True)
+        summary = await self.node_service.status_summary(persist=True, force=True)
+        if summary.get("desired_state") == "stopped":
+            return
         if summary["health_status"] == "healthy":
             return
 
@@ -71,9 +73,13 @@ class WatchdogService:
             action_name = str(action.get("action") or "")
             target_name = str(action.get("target_name") or "")
             if action_name == "restart_runtime":
-                if not self.settings.auto_restart_runtime or not self._cooldown_elapsed("runtime", target_name):
+                if not self.settings.auto_restart_runtime or not self._cooldown_elapsed(
+                    "runtime", target_name
+                ):
                     continue
-                await self.node_service.restart(reason=f"watchdog.{action.get('reason') or 'runtime'}")
+                await self.node_service.restart(
+                    reason=f"watchdog.{action.get('reason') or 'runtime'}"
+                )
                 self._mark_action("runtime", target_name)
                 self.database.record_event(
                     event_type="watchdog.runtime_restart",
@@ -86,7 +92,10 @@ class WatchdogService:
                 continue
 
             if action_name == "restart_interface":
-                if not self.settings.auto_restart_interface or not self._cooldown_elapsed("interface", target_name):
+                if (
+                    not self.settings.auto_restart_interface
+                    or not self._cooldown_elapsed("interface", target_name)
+                ):
                     continue
                 await self.interface_service.restart(target_name)
                 self._mark_action("interface", target_name)
@@ -112,7 +121,11 @@ class WatchdogService:
                     payload={"interface": target_name, "policy_action": action},
                 )
 
-        if policy["actions"] or not self.settings.auto_restart_interface or summary["runtime_status"] != "running":
+        if (
+            policy["actions"]
+            or not self.settings.auto_restart_interface
+            or summary["runtime_status"] != "running"
+        ):
             return
 
         for interface in summary["interfaces"]:

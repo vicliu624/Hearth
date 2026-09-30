@@ -1,4 +1,6 @@
-﻿# Hearth
+# Hearth
+
+**v0.2：**[更新记录](CHANGELOG.md) · [升级与运行说明](docs/upgrade-v0.2.md) · [性能验证](docs/performance-v0.2.md) · [界面术语约定](docs/terminology.zh-CN.md)
 
 > 面向个人、家庭与小型社区的个人 Reticulum 基础设施节点系统。
 
@@ -249,7 +251,7 @@ Hearth 就是为了解决这些问题而存在。
 ---
 
 ## 当前状态
-当前版本是 **v0.1.0**。
+当前版本是 **v0.2.0**。
 
 目前仓库已经包含一套相当完整的控制面实现：Web 控制台、CLI、REST API、存储层、配置工作流，以及覆盖较广的运维页面和服务模块。
 

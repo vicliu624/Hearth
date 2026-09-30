@@ -21,8 +21,12 @@ class NodeState(Base):
     runtime_status: Mapped[str] = mapped_column(String(32), default="stopped")
     health_status: Mapped[str] = mapped_column(String(32), default="warning")
     uptime_seconds: Mapped[int] = mapped_column(Integer, default=0)
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_check_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     restart_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
@@ -35,12 +39,18 @@ class InterfaceRuntime(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     status: Mapped[str] = mapped_column(String(32), default="stopped")
     health_status: Mapped[str] = mapped_column(String(32), default="warning")
-    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    rx_packets: Mapped[int] = mapped_column(Integer, default=0)
-    tx_packets: Mapped[int] = mapped_column(Integer, default=0)
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # v0.1 columns were named packets but stored Reticulum byte counters.
+    # Preserve their SQL names so existing databases need no destructive rewrite.
+    rx_bytes: Mapped[int] = mapped_column("rx_packets", Integer, default=0)
+    tx_bytes: Mapped[int] = mapped_column("tx_packets", Integer, default=0)
     error_count: Mapped[int] = mapped_column(Integer, default=0)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
 
 
 class InterfaceMetricSnapshot(Base):
@@ -48,10 +58,12 @@ class InterfaceMetricSnapshot(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     interface_name: Mapped[str] = mapped_column(String(120))
-    rx_packets: Mapped[int] = mapped_column(Integer, default=0)
-    tx_packets: Mapped[int] = mapped_column(Integer, default=0)
+    rx_bytes: Mapped[int] = mapped_column("rx_packets", Integer, default=0)
+    tx_bytes: Mapped[int] = mapped_column("tx_packets", Integer, default=0)
     error_count: Mapped[int] = mapped_column(Integer, default=0)
-    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
 
 
 class EventRecord(Base):
@@ -63,7 +75,9 @@ class EventRecord(Base):
     source: Mapped[str] = mapped_column(String(64), default="system")
     message: Mapped[str] = mapped_column(Text)
     payload_json: Mapped[str] = mapped_column(Text, default="{}")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
 
 
 class PeerRecord(Base):
@@ -72,8 +86,12 @@ class PeerRecord(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     peer_hash: Mapped[str] = mapped_column(String(128), unique=True)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     via_interface: Mapped[str | None] = mapped_column(String(120), nullable=True)
     hop_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     metadata_json: Mapped[str] = mapped_column(Text, default="{}")
@@ -87,8 +105,12 @@ class RouteRecord(Base):
     next_hop: Mapped[str | None] = mapped_column(String(128), nullable=True)
     via_interface: Mapped[str | None] = mapped_column(String(120), nullable=True)
     hop_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
 
 
 class AnnounceRecord(Base):
@@ -97,7 +119,9 @@ class AnnounceRecord(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     source_hash: Mapped[str] = mapped_column(String(128))
     via_interface: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
     hop_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     raw_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     metadata_json: Mapped[str] = mapped_column(Text, default="{}")
@@ -110,7 +134,9 @@ class RestartRecord(Base):
     target_type: Mapped[str] = mapped_column(String(64))
     target_name: Mapped[str] = mapped_column(String(120))
     reason: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
 
 
 class MaintenanceStateRecord(Base):
@@ -119,8 +145,12 @@ class MaintenanceStateRecord(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    until_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    until_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
 
 
 class UserRecord(Base):
@@ -131,9 +161,15 @@ class UserRecord(Base):
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role: Mapped[str] = mapped_column(String(64), default="viewer")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    last_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class ApiTokenRecord(Base):
@@ -147,9 +183,15 @@ class ApiTokenRecord(Base):
     role: Mapped[str] = mapped_column(String(64), default="viewer")
     scopes_json: Mapped[str] = mapped_column(Text, default="[]")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class ConfigRevisionRecord(Base):
@@ -162,7 +204,9 @@ class ConfigRevisionRecord(Base):
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     checksum: Mapped[str] = mapped_column(String(64), default="")
     raw_text: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
 
 
 class FleetNodeRecord(Base):
@@ -183,9 +227,15 @@ class FleetNodeRecord(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     local: Mapped[bool] = mapped_column(Boolean, default=False)
     source: Mapped[str] = mapped_column(String(64), default="inventory")
-    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
 
 
 class NodeGroupRecord(Base):
@@ -195,8 +245,12 @@ class NodeGroupRecord(Base):
     name: Mapped[str] = mapped_column(String(160), unique=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     group_type: Mapped[str] = mapped_column(String(64), default="custom")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
 
 
 class ConfigTemplateRecord(Base):
@@ -208,9 +262,12 @@ class ConfigTemplateRecord(Base):
     template_text: Mapped[str] = mapped_column(Text)
     target_group: Mapped[str | None] = mapped_column(String(160), nullable=True)
     target_nodes_json: Mapped[str] = mapped_column(Text, default="[]")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
 
 
 class RolloutRecord(Base):
@@ -225,8 +282,12 @@ class RolloutRecord(Base):
     status: Mapped[str] = mapped_column(String(32), default="planned")
     actor: Mapped[str] = mapped_column(String(120), default="system")
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
 
 
 class UpgradeOperationRecord(Base):
@@ -244,5 +305,9 @@ class UpgradeOperationRecord(Base):
     maintenance_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     actor: Mapped[str] = mapped_column(String(120), default="system")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )

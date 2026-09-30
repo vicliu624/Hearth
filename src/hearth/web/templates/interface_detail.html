@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 
 {% block content %}
 <section class="page-hero">
@@ -17,14 +17,14 @@
     <p class="metric-card__subtext">{{ tv(interface.health_status) }}</p>
   </article>
   <article class="metric-card">
-    <p class="metric-card__eyebrow">RX / TX</p>
+    <p class="metric-card__eyebrow">{{ t('field.rx_tx') }}</p>
     <h2>{{ interface.rx_tx }}</h2>
     <p class="metric-card__subtext">{{ t("field.rx_tx") }}</p>
   </article>
   <article class="metric-card">
     <p class="metric-card__eyebrow">{{ t("dashboard.activity_rate") }}</p>
-    <h2>{{ traffic_snapshot.rx_packets }}</h2>
-    <p class="metric-card__subtext">{{ t("dashboard.traffic") }} · {{ traffic_snapshot.tx_packets }}</p>
+    <h2>{{ traffic_snapshot.rx_bytes }}</h2>
+    <p class="metric-card__subtext">{{ t("dashboard.traffic") }} · {{ traffic_snapshot.tx_bytes }}</p>
   </article>
   <article class="metric-card">
     <p class="metric-card__eyebrow">{{ t("dashboard.errors") }}</p>
@@ -60,11 +60,11 @@
     <div class="metric-ribbon">
       <article>
         <span>{{ t("dashboard.activity_rate") }}</span>
-        <strong>{{ traffic_snapshot.rx_packets }}</strong>
+        <strong>{{ traffic_snapshot.rx_bytes }}</strong>
       </article>
       <article>
         <span>{{ t("dashboard.traffic") }}</span>
-        <strong>{{ traffic_snapshot.tx_packets }}</strong>
+        <strong>{{ traffic_snapshot.tx_bytes }}</strong>
       </article>
       <article>
         <span>{{ t("dashboard.errors") }}</span>

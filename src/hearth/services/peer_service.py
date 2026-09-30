@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from fastapi import HTTPException
 
@@ -7,22 +7,26 @@ from hearth.storage.db import Database
 
 
 class PeerService:
-    def __init__(self, peer_store: PeerStore, database: Database, observation_service) -> None:
+    def __init__(
+        self, peer_store: PeerStore, database: Database, observation_service
+    ) -> None:
         self.peer_store = peer_store
         self.database = database
         self.observation_service = observation_service
 
     async def list_recent(self, limit: int = 100) -> list[dict]:
-        await self.observation_service.sync()
-        items = [peer.to_dict() for peer in self.peer_store.list_recent()]
-        if items:
-            return items[:limit]
-        return self.database.list_peers(limit=limit)
+        return await self.observation_service.list_peers(limit)
 
     async def get_peer(self, peer_hash: str) -> dict:
-        await self.observation_service.sync()
         peer = self.peer_store.get(peer_hash)
         persisted = self.database.get_peer(peer_hash)
+        if (
+            self.observation_service.adapter.settings.reticulum.backend
+            != "mock_process"
+            and persisted is not None
+            and persisted.get("source_type") != "announce"
+        ):
+            persisted = None
         if peer is not None:
             payload = peer.to_dict()
             if persisted is None:

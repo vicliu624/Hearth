@@ -1,11 +1,11 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 
 {% block content %}
 <section class="page-hero">
   <div>
     <p class="page-kicker">{{ t("nav.fleet") }}</p>
     <h1>{{ t("page.fleet_nodes") }}</h1>
-    <p class="page-subtitle">{{ page_total }} {{ t("fleet.total_nodes") }}</p>
+    <p class="page-subtitle">{{ t("count.nodes", count=page_total) }}</p>
   </div>
   <div class="inline-form">
     <a class="button-link" href="{{ fleet_href }}">{{ t("page.fleet") }}</a>
@@ -31,10 +31,10 @@
       <label class="toolbar-field"><span>{{ t("field.tags") }}</span><input type="text" name="tags" placeholder="home,relay"></label>
       <label class="toolbar-field toolbar-field--small"><span>{{ t("field.version") }}</span><input type="text" name="version" value="0.1.0"></label>
       <label class="toolbar-field toolbar-field--small"><span>{{ t("field.health") }}</span>
-        <select name="health_status"><option value="healthy">healthy</option><option value="warning">warning</option><option value="critical">critical</option></select>
+        <select name="health_status"><option value="healthy">{{ tv("healthy") }}</option><option value="warning">{{ tv("warning") }}</option><option value="critical">{{ tv("critical") }}</option></select>
       </label>
       <label class="toolbar-field toolbar-field--small"><span>{{ t("field.status") }}</span>
-        <select name="runtime_status"><option value="running">running</option><option value="stopped">stopped</option></select>
+        <select name="runtime_status"><option value="running">{{ tv("running") }}</option><option value="stopped">{{ tv("stopped") }}</option></select>
       </label>
       <label class="toolbar-field"><span>{{ t("field.region") }}</span><input type="text" name="region"></label>
     </div>
@@ -60,7 +60,7 @@
     <tbody>
       {% for node in nodes %}
       <tr>
-        <td><strong>{{ node.node_name }}</strong>{% if node.local %}<div class="muted">local</div>{% endif %}</td>
+        <td><strong>{{ node.node_name }}</strong>{% if node.local %}<div class="muted">{{ tv("local") }}</div>{% endif %}</td>
         <td>{{ node.group_name or '-' }}</td>
         <td>{{ node.tags | join(', ') if node.tags else '-' }}</td>
         <td>{{ node.version }}</td>

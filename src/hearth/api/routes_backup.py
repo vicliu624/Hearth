@@ -9,7 +9,11 @@ from hearth.api.security import require_permission
 from hearth.core.lifecycle import ApplicationContext
 
 
-router = APIRouter(prefix="/api/backup", tags=["backup"], dependencies=[Depends(require_permission("configure"))])
+router = APIRouter(
+    prefix="/api/backup",
+    tags=["backup"],
+    dependencies=[Depends(require_permission("configure"))],
+)
 
 
 @router.get("")
@@ -44,7 +48,7 @@ async def import_backup(
     payload: dict[str, Any] = Body(...),
     context: ApplicationContext = Depends(get_context),
 ) -> dict:
-    return context.backup_service.import_archive(payload["archive_path"])
+    return await context.restore_backup(payload["archive_path"])
 
 
 @router.get("/detail")
@@ -56,7 +60,9 @@ async def backup_detail(
 
 
 @router.get("/snapshots")
-async def backup_snapshots(context: ApplicationContext = Depends(get_context)) -> list[dict]:
+async def backup_snapshots(
+    context: ApplicationContext = Depends(get_context),
+) -> list[dict]:
     return context.backup_service.list_snapshots()
 
 

@@ -768,7 +768,11 @@ install_hearth() {
     if [[ "$USE_SYSTEM_PYTHON_RUNTIME_DEPS" == true ]]; then
         run_with_retry 3 5 run_root "$VENV_PYTHON" -m pip install --no-build-isolation --no-deps --upgrade "$INSTALL_DIR"
     else
-        run_with_retry 3 5 run_root "$VENV_PYTHON" -m pip install --no-build-isolation --upgrade "$INSTALL_DIR"
+        local package_target="$INSTALL_DIR"
+        if [[ "$BACKEND" != "mock_process" ]]; then
+            package_target="$INSTALL_DIR[reticulum]"
+        fi
+        run_with_retry 3 5 run_root "$VENV_PYTHON" -m pip install --no-build-isolation --upgrade -c "$INSTALL_DIR/requirements-lock.txt" "$package_target"
     fi
     log_success "Hearth Python package installed"
 }
@@ -1094,6 +1098,7 @@ Environment=HEARTH_CONFIG=$CONFIG_FILE
 Environment=PATH=$service_path
 ExecStart=$VENV_DIR/bin/hearth-api
 Restart=on-failure
+KillMode=process
 RestartSec=5
 TimeoutStopSec=20
 UMask=0027

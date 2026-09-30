@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 
 {% block content %}
 <section class="page-hero">
@@ -95,7 +95,7 @@
   </table>
   <div class="table-footer">
     <span>{{ t("table.rows_per_page") }}: {{ filters.limit }}</span>
-    <span>1 of 1</span>
+    <span>{{ t('table.single_page') }}</span>
   </div>
 </section>
 {% endblock %}

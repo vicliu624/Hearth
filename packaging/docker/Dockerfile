@@ -7,7 +7,7 @@ WORKDIR /app
 COPY pyproject.toml README.md /app/
 COPY src /app/src
 
-RUN python -m pip install --upgrade pip &&             pip install .
+RUN python -m pip install --upgrade pip &&             pip install '.[reticulum]'
 
 EXPOSE 8480
 VOLUME ["/data"]

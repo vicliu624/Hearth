@@ -13,7 +13,7 @@
 </section>
 
 <section class="panel table-panel">
-  <div class="panel-header"><div><h2>Installed Plugins</h2></div></div>
+  <div class="panel-header"><div><h2>{{ t('plugins.installed') }}</h2></div></div>
   <table class="data-table compact-table">
     <thead>
       <tr>
@@ -22,7 +22,7 @@
         <th>{{ t("field.status") }}</th>
         <th>{{ t("field.source") }}</th>
         <th>{{ t("plugins.version") }}</th>
-        <th>Sandbox</th>
+        <th>{{ t('plugins.sandbox') }}</th>
         <th>{{ t("field.summary") }}</th>
       </tr>
     </thead>
@@ -47,15 +47,15 @@
 <section class="panel table-panel">
   <div class="panel-header">
     <div>
-      <h2>Catalog</h2>
-      <p>Catalog entries include source trust state, signature verification state, dependencies, and install readiness.</p>
+      <h2>{{ t('plugins.catalog') }}</h2>
+      <p>{{ t('plugins.catalog_hint') }}</p>
     </div>
   </div>
   <table class="data-table compact-table">
     <thead>
       <tr>
         <th>{{ t("field.name") }}</th>
-        <th>State</th>
+        <th>{{ t('field.state') }}</th>
         <th>{{ t("field.source") }}</th>
         <th>{{ t("plugins.version") }}</th>
         <th>{{ t("plugins.signature_status") }}</th>
@@ -75,20 +75,20 @@
         <td>{{ plugin.description or '-' }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="7" class="empty-state">No catalog plugins available.</td></tr>
+      <tr><td colspan="7" class="empty-state">{{ t('plugins.no_catalog') }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </section>
 
 <section class="panel table-panel">
-  <div class="panel-header"><div><h2>Recent Plugin Operations</h2></div></div>
+  <div class="panel-header"><div><h2>{{ t('plugins.recent_operations') }}</h2></div></div>
   <table class="data-table compact-table">
     <thead>
       <tr>
         <th>{{ t("field.time") }}</th>
         <th>{{ t("field.name") }}</th>
-        <th>Operation</th>
+        <th>{{ t('field.operation') }}</th>
         <th>{{ t("field.summary") }}</th>
       </tr>
     </thead>
@@ -101,7 +101,7 @@
         <td>{{ item.payload | tojson }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="4" class="empty-state">No plugin activity recorded yet.</td></tr>
+      <tr><td colspan="4" class="empty-state">{{ t('plugins.no_activity') }}</td></tr>
       {% endfor %}
     </tbody>
   </table>

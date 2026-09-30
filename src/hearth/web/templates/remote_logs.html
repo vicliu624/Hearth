@@ -12,7 +12,7 @@
 
 <section class="dashboard-grid">
   <section class="panel toolbar-panel">
-    <div class="panel-header"><div><h2>Filters</h2></div></div>
+    <div class="panel-header"><div><h2>{{ t('section.filters') }}</h2></div></div>
     <form class="toolbar toolbar--between" method="get" action="{{ request.url.path }}">
       <div class="toolbar-group">
         <label class="toolbar-field toolbar-field--small">
@@ -46,19 +46,19 @@
   </section>
 
   <section class="panel">
-    <div class="panel-header"><div><h2>Sync Remote Nodes</h2></div></div>
+    <div class="panel-header"><div><h2>{{ t('remote_logs.sync_nodes') }}</h2></div></div>
     <form method="post" action="{{ sync_remote_logs_href }}" class="toolbar compact-toolbar">
       <input type="hidden" name="action" value="sync">
       <label class="toolbar-field toolbar-field--small"><span>{{ t("logs.limit") }}</span><input type="number" name="limit" min="1" max="500" value="{{ filters.limit }}"></label>
-      <button type="submit">Sync Now</button>
+      <button type="submit">{{ t('remote_logs.sync_now') }}</button>
     </form>
-    <p class="muted">Remote sync pulls `/api/logs` from fleet nodes that expose a management `dashboard_url`.</p>
+    <p class="muted">{{ t('remote_logs.sync_hint') }}</p>
   </section>
 </section>
 
 {% if result %}
 <section class="panel">
-  <div class="panel-header"><div><h2>Last Sync Result</h2></div></div>
+  <div class="panel-header"><div><h2>{{ t('remote_logs.last_sync') }}</h2></div></div>
   <pre>{{ result | tojson(indent=2) }}</pre>
 </section>
 {% endif %}

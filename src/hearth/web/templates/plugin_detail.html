@@ -17,15 +17,15 @@
       <dt>{{ t("field.name") }}</dt><dd>{{ plugin.name }}</dd>
       <dt>{{ t("field.type") }}</dt><dd>{{ plugin.type }}</dd>
       <dt>{{ t("field.source") }}</dt><dd>{{ plugin.source }}</dd>
-      <dt>Catalog State</dt><dd>{{ plugin.state_label }}</dd>
+      <dt>{{ t('plugins.catalog_state') }}</dt><dd>{{ plugin.state_label }}</dd>
       <dt>{{ t("field.status") }}</dt><dd>{{ tv('enabled' if plugin.enabled else 'disabled') if plugin.installed else '-' }}</dd>
       <dt>{{ t("plugins.version") }}</dt><dd>{{ plugin.version }}</dd>
-      <dt>Catalog Version</dt><dd>{{ plugin.catalog_version or '-' }}</dd>
+      <dt>{{ t('plugins.catalog_version') }}</dt><dd>{{ plugin.catalog_version or '-' }}</dd>
       <dt>{{ t("plugins.compatibility") }}</dt><dd>{{ plugin.compatibility }}</dd>
       <dt>{{ t("plugins.trusted") }}</dt><dd>{{ tv('enabled' if plugin.trusted_source else 'disabled') }}</dd>
       <dt>{{ t("plugins.signature_status") }}</dt><dd>{{ tv(plugin.signature_status) if plugin.signature_status else '-' }}</dd>
-      <dt>Installable</dt><dd>{{ 'Yes' if plugin.installable else 'No' }}</dd>
-      <dt>Sandbox</dt><dd>{{ plugin.sandbox_boundary.runtime_scope if plugin.sandbox_boundary else '-' }}</dd>
+      <dt>{{ t('plugins.installable') }}</dt><dd>{{ 'Yes' if plugin.installable else 'No' }}</dd>
+      <dt>{{ t('plugins.sandbox') }}</dt><dd>{{ plugin.sandbox_boundary.runtime_scope if plugin.sandbox_boundary else '-' }}</dd>
     </dl>
   </section>
 
@@ -38,20 +38,20 @@
         <button type="submit" name="action" value="{{ 'disable' if plugin.enabled else 'enable' }}">{{ t('plugins.disable' if plugin.enabled else 'plugins.enable') }}</button>
       </form>
       <form method="post" action="{{ request.url.path }}" class="inline-form">
-        <button type="submit" name="action" value="update">Update from Catalog</button>
+        <button type="submit" name="action" value="update">{{ t('plugins.update_from_catalog') }}</button>
       </form>
       <form method="post" action="{{ request.url.path }}" class="inline-form">
-        <label class="toolbar-field toolbar-field--small"><span>Remove dependents</span><input type="checkbox" name="remove_dependents" value="true"></label>
-        <button type="submit" name="action" value="uninstall">Uninstall</button>
+        <label class="toolbar-field toolbar-field--small"><span>{{ t('plugins.remove_dependents') }}</span><input type="checkbox" name="remove_dependents" value="true"></label>
+        <button type="submit" name="action" value="uninstall">{{ t('plugins.uninstall') }}</button>
       </form>
       {% else %}
       <form method="post" action="{{ request.url.path }}" class="inline-form">
-        <label class="toolbar-field toolbar-field--small"><span>Enable after install</span><input type="checkbox" name="enabled" value="true" checked></label>
-        <button type="submit" name="action" value="install">Install</button>
+        <label class="toolbar-field toolbar-field--small"><span>{{ t('plugins.enable_after_install') }}</span><input type="checkbox" name="enabled" value="true" checked></label>
+        <button type="submit" name="action" value="install">{{ t('plugins.install') }}</button>
       </form>
       {% endif %}
       <form method="post" action="{{ request.url.path }}" class="inline-form">
-        <button type="submit" name="action" value="refresh_sources">Refresh Sources</button>
+        <button type="submit" name="action" value="refresh_sources">{{ t('plugins.refresh_sources') }}</button>
       </form>
       <a class="button-link" href="{{ plugin_sources_href }}">{{ t("page.plugin_sources") }}</a>
       <a class="button-link" href="{{ plugins_href }}">{{ t("plugins.back") }}</a>
@@ -78,7 +78,7 @@
       {% endfor %}
     </ul>
     {% if dependency_plan %}
-    <div class="panel-header"><div><h2>Resolved Install Plan</h2></div></div>
+    <div class="panel-header"><div><h2>{{ t('plugins.install_plan') }}</h2></div></div>
     <ul class="detail-list">
       {% for item in dependency_plan %}
       <li>{{ item.name }} · {{ item.version }} · {{ item.source }}</li>
@@ -94,8 +94,8 @@
       <dt>{{ key }}</dt><dd>{{ value }}</dd>
       {% endfor %}
       {% if plugin.sandbox_boundary %}
-      <dt>Filesystem</dt><dd>{{ plugin.sandbox_boundary.filesystem | join(', ') if plugin.sandbox_boundary.filesystem else '-' }}</dd>
-      <dt>Network</dt><dd>{{ plugin.sandbox_boundary.network | join(', ') if plugin.sandbox_boundary.network else '-' }}</dd>
+      <dt>{{ t('field.filesystem') }}</dt><dd>{{ plugin.sandbox_boundary.filesystem | join(', ') if plugin.sandbox_boundary.filesystem else '-' }}</dd>
+      <dt>{{ t('field.network') }}</dt><dd>{{ plugin.sandbox_boundary.network | join(', ') if plugin.sandbox_boundary.network else '-' }}</dd>
       {% endif %}
     </dl>
     <div class="panel-header"><div><h2>{{ t("plugins.config") }}</h2></div></div>
@@ -104,9 +104,9 @@
 </section>
 
 <section class="panel table-panel">
-  <div class="panel-header"><div><h2>Recent Operations</h2></div></div>
+  <div class="panel-header"><div><h2>{{ t('section.recent_operations') }}</h2></div></div>
   <table class="data-table compact-table">
-    <thead><tr><th>{{ t("field.time") }}</th><th>Operation</th><th>{{ t("field.summary") }}</th></tr></thead>
+    <thead><tr><th>{{ t("field.time") }}</th><th>{{ t('field.operation') }}</th><th>{{ t("field.summary") }}</th></tr></thead>
     <tbody>
       {% for item in plugin_history %}
       <tr>
@@ -115,7 +115,7 @@
         <td>{{ item.payload | tojson }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="3" class="empty-state">No plugin history for this entry.</td></tr>
+      <tr><td colspan="3" class="empty-state">{{ t('plugins.no_history') }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -123,7 +123,7 @@
 
 {% if result %}
 <section class="panel">
-  <div class="panel-header"><div><h2>Result</h2></div></div>
+  <div class="panel-header"><div><h2>{{ t('field.result') }}</h2></div></div>
   <pre>{{ result | tojson(indent=2) }}</pre>
 </section>
 {% endif %}

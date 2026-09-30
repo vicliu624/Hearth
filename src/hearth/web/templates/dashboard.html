@@ -52,11 +52,11 @@
     <div class="metric-ribbon">
       <article>
         <span>{{ t("dashboard.activity_rate") }}</span>
-        <strong>{{ traffic_snapshot.rx_packets }}</strong>
+        <strong>{{ traffic_snapshot.rx_bytes }}</strong>
       </article>
       <article>
         <span>{{ t("dashboard.traffic") }}</span>
-        <strong>{{ traffic_snapshot.tx_packets }}</strong>
+        <strong>{{ traffic_snapshot.tx_bytes }}</strong>
       </article>
       <article>
         <span>{{ t("dashboard.errors") }}</span>
@@ -117,7 +117,7 @@
           <span class="status-dot status-dot--{{ 'success' if interface.status == 'running' else 'info' if interface.status == 'stopped' else 'warning' }}"></span>
           <div>
             <strong>{{ interface.name }}</strong>
-            <span>{{ interface.type }} · {{ interface.metrics.rx_packets }} / {{ interface.metrics.tx_packets }}</span>
+            <span>{{ interface.type }} · {{ interface.metrics.rx_bytes }} / {{ interface.metrics.tx_bytes }}</span>
           </div>
         </div>
         <span class="status-chip">{{ tv(interface.status) }}</span>
