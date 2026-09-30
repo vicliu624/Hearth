@@ -481,3 +481,50 @@ def test_restore_rolls_back_if_service_activation_fails(tmp_path, monkeypatch):
         assert not context.adapter.status().running
 
     asyncio.run(scenario())
+
+
+def test_tcp_clients_keep_distinct_connection_names():
+    adapter = object.__new__(ManagedReticulumAdapter)
+    names = [
+        adapter._normalize_interface_name(
+            f"TCPInterface[Client on LAN TCP/192.0.2.1:{port}]", "Client on LAN TCP"
+        )
+        for port in (1001, 1002)
+    ]
+    assert names[0] != names[1]
+    assert names[0].endswith("/192.0.2.1:1001")
+    assert (
+        adapter._normalize_interface_name("TCPInterface[Uplink/example:4242]", "Uplink")
+        == "Uplink"
+    )
+
+
+def test_topology_branches_include_more_than_300_paths(tmp_path, monkeypatch):
+    import asyncio
+    from hearth.core.lifecycle import build_context
+
+    context = build_context(write_config(tmp_path))
+
+    async def scenario():
+        await context.startup(auto_start_runtime=False, enable_background_jobs=False)
+        routes = [
+            {
+                "destination_hash": f"{i:032x}",
+                "via_interface": f"Client/{i % 2}",
+                "next_hop": "abc",
+                "hop_count": 3,
+            }
+            for i in range(650)
+        ]
+
+        async def list_routes(limit=100):
+            return routes[:limit]
+
+        monkeypatch.setattr(context.route_service, "list_routes", list_routes)
+        snapshot = await context.topology_service.snapshot()
+        assert snapshot["overview"]["route_count"] == 650
+        assert len(snapshot["branches"]) == 2
+        assert sum(b["count"] for b in snapshot["branches"]) == 650
+        assert all(len(b["destinations"]) == 30 for b in snapshot["branches"])
+
+    asyncio.run(scenario())

@@ -62,6 +62,7 @@ import {
   MetricsPage,
   OverviewPage,
 } from "./pages";
+import { TopologyPage } from "./topology";
 import { ServerPage } from "./server-page";
 
 const groups = [
@@ -238,7 +239,7 @@ function App() {
       path === "/" ||
       path.startsWith("/interfaces") ||
       path === "/metrics-dashboard" ||
-      path === "/health"
+      path === "/health" || path === "/topology"
     ))
       return;
     if (shell.responseStatus >= 400) return;
@@ -256,6 +257,8 @@ function App() {
       <InterfacesPage />
     ) : path === "/metrics-dashboard" ? (
       <MetricsPage />
+    ) : path === "/topology" ? (
+      <TopologyPage />
     ) : path === "/health" ? (
       <HealthPage />
     ) : path === "/config" ? (

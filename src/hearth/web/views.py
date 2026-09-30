@@ -1194,7 +1194,7 @@ async def render_peers_page(
         filters=filters,
         peer_interfaces=peer_interfaces,
         clear_peers_href=build_href(request, "/peers"),
-        topology_href=build_href(request, "/routes"),
+        topology_href=build_href(request, "/topology"),
         header_state=build_header_state(summary),
         shell_summary=summary,
     )

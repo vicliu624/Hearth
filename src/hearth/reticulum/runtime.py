@@ -174,6 +174,11 @@ class ManagedReticulumAdapter(ReticulumAdapter):
             return None
 
     def _normalize_interface_name(self, raw_name: Any, short_name: Any = None) -> str:
+        raw_connection = str(raw_name or "").strip()
+        if raw_connection.startswith(
+            "TCPInterface[Client on "
+        ) and raw_connection.endswith("]"):
+            return raw_connection.split("[", 1)[1][:-1]
         short = str(short_name or "").strip()
         if short and "\x00" not in short:
             return short

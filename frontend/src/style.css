@@ -1172,3 +1172,4 @@ img {
 }
 
 .boot-screen { display: grid; min-height: 100vh; place-items: center; color: var(--animal-text-color); background: var(--animal-bg-color); font-family: var(--animal-font-family); }
+.topology-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.topology-tools>div:first-child{flex:1;min-width:180px}.topology-canvas{width:100%;height:auto;min-height:360px;max-height:75vh;touch-action:none;cursor:grab;background:radial-gradient(ellipse,#f8f7e8 0%,#edf4ec 100%);border-radius:20px}.topology-node{cursor:pointer}.topology-node:focus{outline:none}.topology-node:focus circle{stroke:#584a38;stroke-width:5}.topology-legend{font-size:13px;line-height:1.8}.topology-destinations{padding-left:18px;overflow-wrap:anywhere;max-height:360px;overflow:auto}.topology-destinations li{padding:7px 0}

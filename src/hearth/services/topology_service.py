@@ -120,7 +120,7 @@ class TopologyService:
         self,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
         peers = await self.peer_service.list_recent(limit=300)
-        routes = await self.route_service.list_routes(limit=300)
+        routes = await self.route_service.list_routes(limit=None)
         current_names = {item.name for item in self.settings.interfaces}
         current_names.update(
             item.name
@@ -307,7 +307,37 @@ class TopologyService:
             ),
             "average_hops": average_hops,
         }
+        branches = {}
+        for route in routes:
+            interface = str(route.get("via_interface") or "unknown")
+            via = str(route.get("next_hop") or "")
+            key = (interface, via)
+            branch = branches.setdefault(
+                key,
+                {
+                    "interface": interface,
+                    "next_hop": via,
+                    "count": 0,
+                    "hops": {},
+                    "destinations": [],
+                },
+            )
+            branch["count"] += 1
+            hops = str(
+                route.get("hop_count") if route.get("hop_count") is not None else "?"
+            )
+            branch["hops"][hops] = branch["hops"].get(hops, 0) + 1
+            if len(branch["destinations"]) < 30:
+                branch["destinations"].append(
+                    {
+                        "hash": route.get("destination_hash"),
+                        "hops": route.get("hop_count"),
+                    }
+                )
         return {
+            "branches": sorted(
+                branches.values(), key=lambda x: (x["interface"], x["next_hop"])
+            ),
             "generated_at": self._now_iso(),
             "local_node": self.settings.system.node_name,
             "overview": overview,

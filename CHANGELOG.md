@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add an interactive local topology graph with pan, zoom, connection filtering and path details; distinguish observed interface relationships from inferred forwarding relationships.
+- Preserve distinct accepted TCP connections and count all paths in topology summaries instead of truncating at 300. Explain unsupported peer observation and link the peer page to the graph.
+
 ## 0.2.0 — 2026-09-30
 
 ### Runtime reliability
