@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 — 2026-10-19
+
+### Security
+
+- Update the frontend build dependency `source-map-js` from 1.2.1 to 1.2.2 to fix denial of service from malicious indexed source maps (CVE-2026-93749; Dependabot PR #1).
+- Rebuild the bundled frontend with the patched dependency. No configuration or data migration is required.
+
 ## 0.3.0 — 2026-09-30
 
 ### Interactive topology and path exploration
