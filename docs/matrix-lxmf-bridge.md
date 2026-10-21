@@ -29,6 +29,19 @@ The worker imports the deployed source at `/opt/hearth/current/src`. Restart the
 bridge service after deploying code changes; restarting the management service alone
 does not interrupt the bridge.
 
+When upgrading, update the separate bridge environment using the new release's
+lock file before restarting the worker. From the release source directory:
+
+```sh
+/opt/hearth/matrix-bridge-venv/bin/python -m pip install --upgrade -r requirements-matrix-bridge-lock.txt '.[matrix_bridge]'
+/opt/hearth/matrix-bridge-venv/bin/python -m pip check
+sudo systemctl restart hearth-matrix-bridge.service
+```
+
+Version 0.3.2 pins aiohttp 3.14.4 for security fixes. Updating only the management
+service leaves the separate bridge environment's dependencies unchanged. Preserve
+existing credentials, identities, key stores and queues during upgrades.
+
 Credentials are a separate JSON file, mode 0600, in a mode 0700 service directory:
 `/var/lib/hearth/matrix-bridge/credentials.json`. Required fields are `homeserver`,
 `user_id`, `device_id`, `access_token`, `room_id`, `allowed_users`, `started_at`

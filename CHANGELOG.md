@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2 — 2026-10-21
+
+### Security
+
+- Update the optional Matrix bridge's pinned `aiohttp` dependency from 3.14.3 to 3.14.4 (PR #2), addressing resource exhaustion, initial request/header timeout, and shared-cookie Secure attribute advisories.
+- Update Vite from 8.3.1 to 8.3.3 (PR #3), addressing the launch-editor Windows command escaping advisory and development server file access checks. Rebuild the bundled frontend.
+- No configuration or data migration is required. Existing Matrix bridge installations must reinstall their optional dependencies using `requirements-matrix-bridge-lock.txt` to receive the aiohttp fix.
+
 ## 0.3.1 — 2026-10-19
 
 ### Security
