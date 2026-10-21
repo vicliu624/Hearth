@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.3 — 2026-10-21
+
+### Security
+
+- Update pinned `certifi` from 2026.7.22 to 2026.10.19 to remove trust in the affected emSign root certificate (GHSA-6q48-6c7w-9gw2).
+- Include the aiohttp and Vite security updates from 0.3.2. Version 0.3.2 was tagged during release preparation; 0.3.3 is the published release containing all three dependency fixes.
+- Existing installations should update their Python dependencies using the new `requirements-lock.txt`; Matrix bridge environments also require the updated bridge lock file. No configuration or data migration is required.
+
 ## 0.3.2 — 2026-10-21
 
 ### Security
